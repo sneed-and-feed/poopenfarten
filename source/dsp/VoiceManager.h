@@ -5,6 +5,7 @@
 #include "MidiEvent.h"
 #include "ParameterSnapshot.h"
 #include "SphincterOscillator.h"
+#include "SamplePitcherEngine.h"
 #include "FluidNoiseEngine.h"
 
 #include <array>
@@ -117,7 +118,8 @@ public:
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;
 
-    void noteOn(int noteNumber, float velocity, float initialGlideFreq = 0.0f) noexcept;
+    void noteOn(int noteNumber, float velocity, float initialGlideFreq = 0.0f,
+                int sampleIndex = 0, float sampleStart = 0.0f, bool sampleReverse = false) noexcept;
     void noteOff() noexcept;
     void setPitchBend(float semitones) noexcept;
     void setAftertouch(float pressure) noexcept;
@@ -167,7 +169,7 @@ private:
     // Asymmetric aerodynamic sub-bass displacement pulse lowpass filter
     OnePoleLowpass mSubThumpFilter;
 
-    SphincterOscillator mOsc;
+    SamplePitcherEngine mSamplePitcher;
     FluidNoiseEngine    mFluid;
     PressureEnvelope    mEnvelope;
 };

@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- Drag-and-Drop Audio File Overlay -->
+  <div id="dropOverlay" class="drop-overlay hidden">
+    <div class="drop-overlay-box">
+      <div class="drop-overlay-icon">📥</div>
+      <div class="drop-overlay-title">DROP CUSTOM AUDIO HERE</div>
+      <div class="drop-overlay-desc">WAV, MP3, OGG, FLAC supported · Resampled to 48 kHz</div>
+    </div>
+  </div>
+
   <!-- Top Studio Header -->
   <header class="app-header">
     <div class="brand-section">
@@ -81,12 +90,51 @@
 
     <!-- Controls Matrix -->
     <section class="controls-matrix">
-      <!-- Card 1: Sphincter Mechanics -->
+      <!-- Card 1: Sample Resynthesizer & Mechanics -->
       <div class="control-card">
         <div class="card-header cyan">
-          <span>1. SPHINCTER MECHANICS</span>
+          <span>1. SAMPLE RESYNTHESIZER</span>
+          <span class="card-badge" id="sampleNameBadge">DRY RIP</span>
         </div>
         <div class="card-body">
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="sampleSelect">Sample Bank [1-8]</label>
+              <span id="sampleDurationBadge" class="control-value">C3 (48 kHz)</span>
+            </div>
+            <select id="sampleSelect" class="card-select sample-select"></select>
+          </div>
+
+          <!-- Quick 1-8 Sample Selector Strip -->
+          <div class="sample-btn-strip" id="sampleBtnStrip">
+            <button class="sample-strip-btn active" data-index="0" title="1: Dry Staccato Rip">1</button>
+            <button class="sample-strip-btn" data-index="1" title="2: Extended Gaseous Rip">2</button>
+            <button class="sample-strip-btn" data-index="2" title="3: Fart with Reverb">3</button>
+            <button class="sample-strip-btn" data-index="3" title="4: Fart Meme Boom">4</button>
+            <button class="sample-strip-btn" data-index="4" title="5: Wet Churn Squelch">5</button>
+            <button class="sample-strip-btn" data-index="5" title="6: Fooz High Pressure">6</button>
+            <button class="sample-strip-btn" data-index="6" title="7: Perfect Resonance">7</button>
+            <button class="sample-strip-btn" data-index="7" title="8: Wet Visceral Blast">8</button>
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_sample_start">Start Offset</label>
+              <span id="param_sample_start_val" class="control-value">0%</span>
+            </div>
+            <input type="range" id="param_sample_start" class="accent-cyan" min="0" max="1" step="0.001" value="0.0">
+          </div>
+
+          <div class="control-row sample-modifiers-row">
+            <button id="sampleReverseBtn" class="pill-toggle-btn" title="Toggle Reverse Playback">
+              <span>⮂ REVERSE</span>
+            </button>
+            <button id="sampleDropBtn" class="pill-toggle-btn custom-drop-btn" title="Load custom WAV/MP3">
+              <span>📁 LOAD AUDIO</span>
+            </button>
+            <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+          </div>
+
           <div class="control-row">
             <div class="control-label-row">
               <label for="param_pressure">Colonic Drive</label>
@@ -337,6 +385,7 @@
   </footer>
 
   <!-- Scripts -->
+  <script src="js/sample_bank.js"></script>
   <script src="js/audio_engine.js"></script>
   <script src="js/ipc_bridge.js"></script>
   <script src="js/visualizer_particles.js"></script>

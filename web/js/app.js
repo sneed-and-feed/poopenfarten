@@ -59,6 +59,158 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 2.5. Sample Bank & Resynthesizer Controller
+    const sampleSelect = document.getElementById('sampleSelect');
+    const sampleBtnStrip = document.getElementById('sampleBtnStrip');
+    const sampleNameBadge = document.getElementById('sampleNameBadge');
+    const sampleDurationBadge = document.getElementById('sampleDurationBadge');
+    const sampleReverseBtn = document.getElementById('sampleReverseBtn');
+    const sampleDropBtn = document.getElementById('sampleDropBtn');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const dropOverlay = document.getElementById('dropOverlay');
+
+    let currentSampleIndex = 0;
+    let isSampleReverse = false;
+
+    function selectSampleIndex(idx) {
+        currentSampleIndex = Math.max(0, Math.min(7, Math.round(idx)));
+        if (sampleSelect) sampleSelect.value = currentSampleIndex;
+
+        const stripBtns = document.querySelectorAll('.sample-strip-btn');
+        stripBtns.forEach((btn, bIdx) => {
+            if (bIdx === currentSampleIndex) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        if (window.SampleBank) {
+            const sample = window.SampleBank.getSample(currentSampleIndex);
+            if (sample) {
+                if (sampleNameBadge) {
+                    sampleNameBadge.textContent = sample.name.toUpperCase();
+                }
+                if (sampleDurationBadge) {
+                    const dur = (sample.numSamples / sample.sampleRate).toFixed(2);
+                    sampleDurationBadge.textContent = `${dur}s (C3)`;
+                }
+            }
+        }
+
+        window.ipcBridge.selectSample(currentSampleIndex);
+    }
+
+    if (window.SampleBank && sampleSelect) {
+        sampleSelect.innerHTML = '';
+        window.SampleBank.samples.forEach((sample) => {
+            const opt = document.createElement('option');
+            opt.value = sample.index;
+            opt.textContent = `${sample.index + 1}: ${sample.name}`;
+            sampleSelect.appendChild(opt);
+        });
+
+        sampleSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'custom') return;
+            selectSampleIndex(parseInt(e.target.value, 10));
+        });
+    }
+
+    if (sampleBtnStrip) {
+        const stripBtns = sampleBtnStrip.querySelectorAll('.sample-strip-btn');
+        stripBtns.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.index, 10);
+                selectSampleIndex(idx);
+            });
+        });
+    }
+
+    if (sampleReverseBtn) {
+        sampleReverseBtn.addEventListener('click', () => {
+            isSampleReverse = !isSampleReverse;
+            sampleReverseBtn.classList.toggle('active', isSampleReverse);
+            window.ipcBridge.setSampleReverse(isSampleReverse);
+        });
+    }
+
+    async function loadAudioBuffer(arrayBuffer, name) {
+        const result = await window.ipcBridge.loadCustomAudio(arrayBuffer, name);
+        if (result) {
+            if (sampleNameBadge) {
+                sampleNameBadge.textContent = result.name.toUpperCase();
+            }
+            if (sampleDurationBadge) {
+                sampleDurationBadge.textContent = `${result.duration.toFixed(2)}s (CUSTOM)`;
+            }
+            document.querySelectorAll('.sample-strip-btn').forEach(btn => btn.classList.remove('active'));
+
+            if (sampleSelect) {
+                let customOpt = sampleSelect.querySelector('option[value="custom"]');
+                if (!customOpt) {
+                    customOpt = document.createElement('option');
+                    customOpt.value = 'custom';
+                    sampleSelect.appendChild(customOpt);
+                }
+                customOpt.textContent = `📁 ${result.name}`;
+                sampleSelect.value = 'custom';
+            }
+        }
+    }
+
+    if (sampleDropBtn && audioFileInput) {
+        sampleDropBtn.addEventListener('click', () => {
+            audioFileInput.click();
+        });
+
+        audioFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const arrayBuffer = await file.arrayBuffer();
+            await loadAudioBuffer(arrayBuffer, file.name);
+            audioFileInput.value = '';
+        });
+    }
+
+    if (dropOverlay) {
+        let dragCounter = 0;
+
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter++;
+            dropOverlay.classList.remove('hidden');
+        });
+
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                dropOverlay.classList.add('hidden');
+            }
+        });
+
+        window.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter = 0;
+            dropOverlay.classList.add('hidden');
+
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                const arrayBuffer = await file.arrayBuffer();
+                await loadAudioBuffer(arrayBuffer, file.name);
+            }
+        });
+    }
+
     // 3. 2D XY Performance Pad (Gut Squeeze vs Dietary Moisture)
     const xyPad = document.getElementById('xyPad');
     const xyPuck = document.getElementById('xyPuck');
@@ -148,6 +300,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id.includes('size')) {
             return `${num.toFixed(2)}x`;
         }
+        if (id === 'param_sample_start') {
+            return `${(num * 100).toFixed(1)}%`;
+        }
         if (id === 'param_porcelain_model') {
             const models = ['Dry Chamber', 'Ceramic Bowl', 'Water Coupled', 'Tiled Enclosure'];
             return models[Math.round(num)] || 'Model';
@@ -174,6 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLabel(id, val);
             window.ipcBridge.setParameter(id, val);
 
+            if (id === 'param_sample_start') {
+                window.ipcBridge.setSampleStart(val);
+            }
+
             if (id === 'macro_squeeze') {
                 const moist = parseFloat(document.getElementById('macro_moisture')?.value || 0.2);
                 updateXYPad(val, moist, false);
@@ -192,6 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selects.forEach((sel) => {
         sel.addEventListener('change', (e) => {
             const id = e.target.id;
+            if (id === 'sampleSelect') return; // Handled by sample controller
             const val = parseFloat(e.target.value);
             window.ipcBridge.setParameter(id, val);
         });
@@ -515,8 +675,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const select = document.getElementById(id);
-        if (select && select.tagName === 'SELECT') {
+        if (select && select.tagName === 'SELECT' && id !== 'sampleSelect') {
             select.value = Math.round(val);
+        }
+
+        if (id === 'sample_index') {
+            selectSampleIndex(val);
+        } else if (id === 'sample_start') {
+            const startSlider = document.getElementById('param_sample_start');
+            if (startSlider) {
+                startSlider.value = val;
+                updateLabel('param_sample_start', val);
+            }
+        } else if (id === 'sample_reverse') {
+            isSampleReverse = !!val;
+            if (sampleReverseBtn) {
+                sampleReverseBtn.classList.toggle('active', isSampleReverse);
+            }
         }
 
         if (id === 'macro_squeeze') {
@@ -547,8 +722,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateLabel(id, val);
                 }
                 const select = document.getElementById(id);
-                if (select && select.tagName === 'SELECT') {
+                if (select && select.tagName === 'SELECT' && id !== 'sampleSelect') {
                     select.value = Math.round(val);
+                }
+            }
+
+            if (typeof data.params['sample_index'] !== 'undefined') {
+                selectSampleIndex(data.params['sample_index']);
+            }
+            if (typeof data.params['sample_start'] !== 'undefined') {
+                const sVal = data.params['sample_start'];
+                const startSlider = document.getElementById('param_sample_start');
+                if (startSlider) {
+                    startSlider.value = sVal;
+                    updateLabel('param_sample_start', sVal);
+                }
+            }
+            if (typeof data.params['sample_reverse'] !== 'undefined') {
+                isSampleReverse = !!data.params['sample_reverse'];
+                if (sampleReverseBtn) {
+                    sampleReverseBtn.classList.toggle('active', isSampleReverse);
                 }
             }
 

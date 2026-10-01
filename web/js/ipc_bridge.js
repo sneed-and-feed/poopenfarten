@@ -113,6 +113,46 @@ class IPCBridge {
         }
     }
 
+    selectSample(sampleIndex) {
+        const idx = Math.max(0, Math.min(7, Math.round(sampleIndex)));
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('selectSample', { index: idx });
+            this.emit('paramChange', { id: 'sample_index', value: idx });
+        }
+        if (this.audioEngine) {
+            this.audioEngine.setSampleIndex(idx);
+        }
+    }
+
+    setSampleStart(offset) {
+        const off = Math.max(0.0, Math.min(1.0, Number(offset)));
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('setSampleStart', { offset: off });
+            this.emit('paramChange', { id: 'sample_start', value: off });
+        }
+        if (this.audioEngine) {
+            this.audioEngine.setSampleStart(off);
+        }
+    }
+
+    setSampleReverse(reverse) {
+        const rev = !!reverse;
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('setSampleReverse', { reverse: rev });
+            this.emit('paramChange', { id: 'sample_reverse', value: rev ? 1 : 0 });
+        }
+        if (this.audioEngine) {
+            this.audioEngine.setSampleReverse(rev);
+        }
+    }
+
+    async loadCustomAudio(arrayBuffer, fileName) {
+        if (this.audioEngine && typeof this.audioEngine.loadCustomAudio === 'function') {
+            return await this.audioEngine.loadCustomAudio(arrayBuffer, fileName);
+        }
+        return null;
+    }
+
     requestState() {
         if (this.backend && typeof this.backend.emitEvent === 'function') {
             this.emit('requestState', {});

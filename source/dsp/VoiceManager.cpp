@@ -14,7 +14,7 @@ static inline float noteToFreq(float noteWithPitchBend) noexcept {
 // ============================================================================
 void PhysicalVoice::prepare(double sampleRate) noexcept {
     mSampleRate = static_cast<float>(sampleRate > 100.0 ? sampleRate : 48000.0);
-    mOsc.prepare(sampleRate);
+    mSamplePitcher.prepare(sampleRate);
     mFluid.prepare(sampleRate);
     mEnvelope.prepare(sampleRate);
     reset();
@@ -36,12 +36,13 @@ void PhysicalVoice::reset() noexcept {
     mSquelchFilter.reset();
     mSubThumpFilter.reset();
 
-    mOsc.reset();
+    mSamplePitcher.reset();
     mFluid.reset();
     mEnvelope.reset();
 }
 
-void PhysicalVoice::noteOn(int noteNumber, float velocity, float initialGlideFreq) noexcept {
+void PhysicalVoice::noteOn(int noteNumber, float velocity, float initialGlideFreq,
+                           int sampleIndex, float sampleStart, bool sampleReverse) noexcept {
     const bool wasActive = isActive();
     mNoteNumber = noteNumber;
     mVelocity = std::clamp(velocity, 0.01f, 1.0f);
@@ -71,12 +72,14 @@ void PhysicalVoice::noteOn(int noteNumber, float velocity, float initialGlideFre
     mSquelchFilter.reset();
     mSubThumpFilter.reset();
 
+    mSamplePitcher.noteOn(sampleIndex, sampleStart, sampleReverse);
     mEnvelope.noteOn(mVelocity);
 }
 
 void PhysicalVoice::noteOff() noexcept {
     if (!mPedalLatched) {
         mEnvelope.noteOff();
+        mSamplePitcher.noteOff();
     }
 }
 
@@ -147,19 +150,14 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     const float releaseDroop = isRelease ? (0.75f * (0.35f + 0.65f * envLevel)) : 1.0f;
     const float effectiveFreq = std::clamp(mCurrentFrequency * droopFactor * releaseDroop, kMinOscFrequencyHz, kMaxOscFrequencyHz);
 
-    // 3. Sphincter valve physical oscillator with mucosal stiction & aperiodic cycle jitter
-    SphincterOscParams oscP;
-    oscP.pressure    = effPressure;
-    oscP.tension     = isRelease ? (params.tension * (0.4f + 0.6f * envLevel)) : params.tension;
-    oscP.aperture    = isRelease ? std::min(1.0f, params.aperture * 1.25f) : params.aperture;
-    oscP.flutter     = isRelease ? std::min(1.0f, params.flutter + 0.30f) : params.flutter;
-    oscP.viscosity   = params.viscosity;
-    oscP.moisture    = params.moisture;
-    oscP.frequencyHz = effectiveFreq;
-
+    // 3. Resample authentic audio recording with 4-point 3rd-order Catmull-Rom Hermite interpolation
     float airVel = 0.0f;
     float aperture = 0.0f;
-    const float oscWave = mOsc.processSample(oscP, airVel, aperture);
+    const float sampleWave = mSamplePitcher.processSample(effectiveFreq, airVel, aperture);
+
+    // Modulate extracted aeroacoustic flow by instantaneous pressure head
+    airVel *= effPressure;
+    aperture = std::clamp(aperture * (0.4f + 0.6f * effPressure), 0.0001f, 0.01f);
 
     // 4. Multiphase fluid turbulence, bubbles, and droplet splatter
     FluidEngineParams fluidP;
@@ -167,9 +165,9 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     fluidP.moisture    = params.moisture;
     fluidP.dropletRate = params.droplet_rate;
 
-    // Trigger explosive droplet clicks and bubble chirps on flap opening transient
-    if (mOsc.wasOpeningTransient()) {
-        mFluid.triggerFlapBurst(mOsc.getOpeningTransientAmp(), params.moisture, params.droplet_rate);
+    // Trigger explosive droplet clicks and bubble chirps on sample onset/burst transients
+    if (std::abs(sampleWave) > 0.45f && (mAgeSamples % 480 == 0)) {
+        mFluid.triggerFlapBurst(std::abs(sampleWave), params.moisture, params.droplet_rate);
     }
 
     const float fluidWave = mFluid.processSample(airVel, aperture, fluidP);
@@ -181,13 +179,13 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     const float qSquelch = 4.5f + 1.5f * std::clamp(params.moisture, 0.0f, 1.0f);
     mSquelchFilter.setBandpass(mSampleRate, fSquelch, qSquelch);
 
-    // Route flap volume flow and turbulence through squelch formant
-    const float squelchInput = oscWave + fluidWave * 0.75f;
+    // Route sample and fluid turbulence through wet squelch formant filter
+    const float squelchInput = sampleWave + fluidWave * 0.75f;
     const float squelchOut = mSquelchFilter.process(squelchInput);
 
     const float moistureAmt = std::clamp(params.moisture, 0.0f, 1.0f);
     const float squelchMix = 0.40f + 0.60f * moistureAmt;
-    const float wetAcousticSignal = oscWave * 0.65f + fluidWave * 0.45f + squelchOut * (2.2f * squelchMix);
+    const float wetAcousticSignal = sampleWave * 0.85f + fluidWave * 0.20f + squelchOut * (1.6f * squelchMix);
 
     // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
     // (Visceral flesh thump, completely replacing electronic sine wave)
@@ -205,8 +203,8 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     const float visceralThump = mSubThumpFilter.process(satThump) * 2.8f;
     const float subBassWave = visceralThump * subGain * envLevel;
 
-    // 7. Voice summation
-    float voiceOutput = wetAcousticSignal + subBassWave;
+    // 7. Voice summation shaped by dynamic pressure envelope
+    float voiceOutput = (wetAcousticSignal + subBassWave) * envLevel;
 
     // 8. Apply de-click crossfading
     if (mDeclickDelta > 0.0f) {
@@ -359,8 +357,8 @@ void VoiceManager::handleNoteOn(int noteNumber, float velocity, const ParameterS
         const float targetFreq = noteToFreq(static_cast<float>(noteNumber) + mPitchBendSemi);
 
         if (!mVoices[0].isActive()) {
-            // First note pressed: full retrigger
-            mVoices[0].noteOn(noteNumber, velocity);
+            // First note pressed: full retrigger with authentic sample
+            mVoices[0].noteOn(noteNumber, velocity, 0.0f, params.sample_index, params.sample_start, params.sample_reverse != 0);
             mLastMonoNote = noteNumber;
         } else {
             // Legato sustain: smooth pitch glide without retriggering envelope
@@ -369,12 +367,14 @@ void VoiceManager::handleNoteOn(int noteNumber, float velocity, const ParameterS
         }
     }
     else if (params.voice_mode == 2) { // Stereo Unison Detune Mode
-        // Unison stacks 4 voices with detune offsets: -7, +7, -14, +14 cents
+        // Unison stacks 4 voices with detune offsets: -7, +7, -14, +14 cents and micro-phase decorrelation
         constexpr std::array<float, 4> detuneCents = { -7.0f, +7.0f, -14.0f, +14.0f };
+        constexpr std::array<float, 4> phaseOffsets = { 0.000f, 0.008f, 0.016f, 0.024f };
         for (size_t i = 0; i < 4; ++i) {
             const float semiOffset = detuneCents[i] * 0.01f + mPitchBendSemi;
             const float freq = noteToFreq(static_cast<float>(noteNumber) + semiOffset);
-            mVoices[i].noteOn(noteNumber, velocity);
+            const float voiceStart = std::clamp(params.sample_start + phaseOffsets[i], 0.0f, 0.95f);
+            mVoices[i].noteOn(noteNumber, velocity, freq, params.sample_index, voiceStart, params.sample_reverse != 0);
             mVoices[i].setFrequencyTarget(freq, params.glide_time);
         }
     }
@@ -392,7 +392,7 @@ void VoiceManager::handleNoteOn(int noteNumber, float velocity, const ParameterS
             voiceIdx = findVoiceToSteal();
         }
 
-        mVoices[voiceIdx].noteOn(noteNumber, velocity);
+        mVoices[voiceIdx].noteOn(noteNumber, velocity, 0.0f, params.sample_index, params.sample_start, params.sample_reverse != 0);
         mVoices[voiceIdx].setPitchBend(mPitchBendSemi);
         mVoices[voiceIdx].setAftertouch(mChannelPressure);
     }

@@ -109,6 +109,9 @@ add_library(ppf42_dsp_core STATIC
     source/dsp/DspMath.h
     source/dsp/ParameterSnapshot.h
     source/dsp/MidiEvent.h
+    source/dsp/SampleBank.h
+    source/dsp/SampleBank.cpp
+    source/dsp/SamplePitcherEngine.h
     source/dsp/SphincterOscillator.h
     source/dsp/SphincterOscillator.cpp
     source/dsp/FluidNoiseEngine.h

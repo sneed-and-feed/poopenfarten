@@ -659,6 +659,128 @@
     }
 
     // =========================================================================
+    // SamplePitcherEngine: Catmull-Rom Hermite Resampling Engine
+    // =========================================================================
+    class SamplePitcherEngine {
+        constructor() {
+            this.sampleRate = 48000.0;
+            this.playhead = 0.0;
+            this.active = false;
+            this.finished = true;
+            this.currentSampleIndex = 0;
+            this.sampleLength = 0;
+            this.sampleData = null;
+            this.reverse = false;
+        }
+
+        prepare(sampleRate) {
+            this.sampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
+            this.reset();
+        }
+
+        reset() {
+            this.playhead = 0.0;
+            this.active = false;
+            this.finished = true;
+            this.currentSampleIndex = 0;
+            this.sampleLength = 0;
+            this.sampleData = null;
+            this.reverse = false;
+        }
+
+        noteOn(sampleIndex = 0, startOffset01 = 0.0, reverse = false, customData = null) {
+            this.reverse = !!reverse;
+            if (customData && customData.length > 0) {
+                this.sampleData = customData;
+                this.sampleLength = customData.length;
+            } else if (global.SampleBank) {
+                const count = global.SampleBank.getSampleCount();
+                const idx = Math.max(0, Math.min(count - 1, sampleIndex || 0));
+                this.currentSampleIndex = idx;
+                this.sampleData = global.SampleBank.getFloatData(idx);
+                this.sampleLength = this.sampleData ? this.sampleData.length : 0;
+            }
+
+            this.finished = (!this.sampleData || this.sampleLength === 0);
+            if (this.finished) {
+                this.active = false;
+                this.playhead = 0.0;
+                return;
+            }
+
+            this.active = true;
+            const clampedOffset = clamp(startOffset01, 0.0, 0.999);
+            const maxIdx = this.sampleLength - 1;
+            this.playhead = this.reverse ? (1.0 - clampedOffset) * maxIdx : clampedOffset * maxIdx;
+        }
+
+        noteOff() {
+            // One-shot finishes with envelope
+        }
+
+        isActive() {
+            return this.active && !this.finished;
+        }
+
+        processSample(effectiveFreq) {
+            if (!this.active || this.finished || !this.sampleData || this.sampleLength === 0) {
+                return { signal: 0.0, airVelocity: 0.0, aperture: 0.0 };
+            }
+
+            if (!this.reverse) {
+                if (this.playhead >= this.sampleLength - 1) {
+                    this.finished = true;
+                    return { signal: 0.0, airVelocity: 0.0, aperture: 0.0 };
+                }
+            } else {
+                if (this.playhead <= 0.0) {
+                    this.finished = true;
+                    return { signal: 0.0, airVelocity: 0.0, aperture: 0.0 };
+                }
+            }
+
+            const i0 = Math.floor(this.playhead);
+            const frac = this.playhead - i0;
+            const len = this.sampleLength;
+
+            const im1 = Math.max(0, Math.min(len - 1, i0 - 1));
+            const i_0 = Math.max(0, Math.min(len - 1, i0));
+            const i1  = Math.max(0, Math.min(len - 1, i0 + 1));
+            const i2  = Math.max(0, Math.min(len - 1, i0 + 2));
+
+            const ym1 = this.sampleData[im1];
+            const y0  = this.sampleData[i_0];
+            const y1  = this.sampleData[i1];
+            const y2  = this.sampleData[i2];
+
+            const wave = interpolateHermite4P3O(ym1, y0, y1, y2, frac);
+
+            const absWave = Math.abs(wave);
+            const airVel = absWave * 32.0;
+            const aperture = 0.001 + 0.0035 * absWave;
+
+            // Pitch step relative to MIDI 48 (C3 = 130.8128 Hz)
+            const safeFreq = clamp(effectiveFreq, kMinOscFrequencyHz, kMaxOscFrequencyHz);
+            const pitchRatio = safeFreq / 130.8127826503;
+            const rateStep = pitchRatio * (48000.0 / this.sampleRate);
+
+            if (!this.reverse) {
+                this.playhead += rateStep;
+                if (this.playhead >= len - 1) this.finished = true;
+            } else {
+                this.playhead -= rateStep;
+                if (this.playhead <= 0.0) this.finished = true;
+            }
+
+            return {
+                signal: flushDenormal(wave),
+                airVelocity: airVel,
+                aperture: aperture
+            };
+        }
+    }
+
+    // =========================================================================
     // PhysicalVoice: Single Aeroacoustic Modeling Voice
     // =========================================================================
     class PhysicalVoice {
@@ -682,14 +804,14 @@
             this.squelchFilter = new BiquadDirectForm2T();
             this.subThumpFilter = new OnePoleLowpass();
 
-            this.osc = new SphincterOscillator();
+            this.samplePitcher = new SamplePitcherEngine();
             this.fluid = new FluidNoiseEngine();
             this.envelope = new PressureEnvelope();
         }
 
         prepare(sampleRate) {
             this.sampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
-            this.osc.prepare(sampleRate);
+            this.samplePitcher.prepare(sampleRate);
             this.fluid.prepare(sampleRate);
             this.envelope.prepare(sampleRate);
             this.reset();
@@ -711,12 +833,12 @@
             this.squelchFilter.reset();
             this.subThumpFilter.reset();
 
-            this.osc.reset();
+            this.samplePitcher.reset();
             this.fluid.reset();
             this.envelope.reset();
         }
 
-        noteOn(noteNumber, velocity, initialGlideFreq = 0.0) {
+        noteOn(noteNumber, velocity, initialGlideFreq = 0.0, sampleIndex = 0, sampleStart = 0.0, sampleReverse = false, customData = null) {
             const wasActive = this.isActive();
             this.noteNumber = noteNumber;
             this.velocity = clamp(velocity, 0.01, 1.0);
@@ -745,12 +867,14 @@
             this.squelchFilter.reset();
             this.subThumpFilter.reset();
 
+            this.samplePitcher.noteOn(sampleIndex, sampleStart, sampleReverse, customData);
             this.envelope.noteOn(this.velocity);
         }
 
         noteOff() {
             if (!this.pedalLatched) {
                 this.envelope.noteOff();
+                this.samplePitcher.noteOff();
             }
         }
 
@@ -817,17 +941,13 @@
             const releaseDroop = isRelease ? (0.75 * (0.35 + 0.65 * envLevel)) : 1.0;
             const effectiveFreq = clamp(this.currentFrequency * droopFactor * releaseDroop, kMinOscFrequencyHz, kMaxOscFrequencyHz);
 
-            // 3. Sphincter oscillator with mucosal stiction & aperiodic cycle jitter
-            const oscP = {
-                pressure: effPressure,
-                tension: isRelease ? (params.tension * (0.4 + 0.6 * envLevel)) : params.tension,
-                aperture: isRelease ? Math.min(1.0, params.aperture * 1.25) : params.aperture,
-                flutter: isRelease ? Math.min(1.0, params.flutter + 0.30) : params.flutter,
-                viscosity: params.viscosity,
-                moisture: params.moisture,
-                frequencyHz: effectiveFreq
-            };
-            const oscRes = this.osc.processSample(oscP);
+            // 3. Resample authentic audio recording with Catmull-Rom Hermite interpolation
+            const sampleRes = this.samplePitcher.processSample(effectiveFreq);
+            const sampleWave = sampleRes.signal;
+
+            // Modulate aeroacoustic airflow and aperture by pressure head
+            const airVel = sampleRes.airVelocity * effPressure;
+            const aperture = clamp(sampleRes.aperture * (0.4 + 0.6 * effPressure), 0.0001, 0.01);
 
             // 4. Fluid turbulence and bubbles
             const fluidP = {
@@ -836,31 +956,31 @@
                 droplet_rate: params.droplet_rate
             };
 
-            // Trigger explosive droplet clicks and bubble chirps on flap opening transient
-            if (oscRes.justOpened) {
-                this.fluid.triggerFlapBurst(oscRes.openingTransientAmp, params.moisture, params.droplet_rate);
+            // Trigger explosive droplet clicks and bubble chirps on burst transients
+            if (Math.abs(sampleWave) > 0.45 && (this.ageSamples % 480 === 0)) {
+                this.fluid.triggerFlapBurst(Math.abs(sampleWave), params.moisture, params.droplet_rate);
             }
 
-            const fluidWave = this.fluid.processSample(oscRes.airVelocity, oscRes.aperture, fluidP);
+            const fluidWave = this.fluid.processSample(airVel, aperture, fluidP);
 
             // 5. Dynamic Wet Squelch Formant Filter (650 Hz - 1200 Hz, Q ~ 4.5 - 6.0)
-            const apertureNorm = clamp(oscRes.aperture / 0.003, 0.0, 1.0);
+            const apertureNorm = clamp(aperture / 0.003, 0.0, 1.0);
             const fSquelch = 650.0 + 550.0 * apertureNorm;
             const qSquelch = 4.5 + 1.5 * clamp(params.moisture, 0.0, 1.0);
             this.squelchFilter.setBandpass(this.sampleRate, fSquelch, qSquelch);
 
-            // Route flap volume flow and turbulence through squelch formant
-            const squelchInput = oscRes.acousticWave + fluidWave * 0.75;
+            // Route sample and fluid turbulence through wet squelch formant
+            const squelchInput = sampleWave + fluidWave * 0.75;
             const squelchOut = this.squelchFilter.process(squelchInput);
 
             const moistureAmt = clamp(params.moisture, 0.0, 1.0);
             const squelchMix = 0.40 + 0.60 * moistureAmt;
-            const wetAcousticSignal = oscRes.acousticWave * 0.65 + fluidWave * 0.45 + squelchOut * (2.2 * squelchMix);
+            const wetAcousticSignal = sampleWave * 0.85 + fluidWave * 0.20 + squelchOut * (1.6 * squelchMix);
 
             // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
             const subGain = dbToGain(params.sub_level);
-            const flowThump = (oscRes.aperture * 1000.0) * (oscRes.airVelocity / 25.0);
-            const dispThump = (oscRes.aperture * 1000.0) * 0.85;
+            const flowThump = (aperture * 1000.0) * (airVel / 25.0);
+            const dispThump = (aperture * 1000.0) * 0.85;
             const rawThump = flowThump * 0.65 + dispThump * 0.35;
 
             const satThump = (rawThump > 0.0) ? (rawThump / (1.0 + 0.75 * rawThump)) : (rawThump * 0.6);
@@ -870,8 +990,8 @@
             const visceralThump = this.subThumpFilter.process(satThump) * 2.8;
             const subBassWave = visceralThump * subGain * envLevel;
 
-            // 7. Voice summation
-            let voiceOutput = wetAcousticSignal + subBassWave;
+            // 7. Voice summation shaped by dynamic pressure envelope
+            let voiceOutput = (wetAcousticSignal + subBassWave) * envLevel;
 
             // 8. De-click crossfading
             if (this.declickDelta > 0.0) {
@@ -1229,12 +1349,17 @@
                 this.lastVoiceMode = params.voice_mode;
             }
 
+            const sIdx = params.sample_index || 0;
+            const sStart = params.sample_start || 0.0;
+            const sRev = !!params.sample_reverse;
+            const cData = params.customAudioData || null;
+
             if (params.voice_mode === 0) { // Mono Legato Mode
                 this.noteStack.push({ noteNumber, velocity });
                 const targetFreq = noteToFreq(noteNumber + this.pitchBendSemi);
 
                 if (!this.voices[0].isActive()) {
-                    this.voices[0].noteOn(noteNumber, velocity);
+                    this.voices[0].noteOn(noteNumber, velocity, 0.0, sIdx, sStart, sRev, cData);
                     this.lastMonoNote = noteNumber;
                 } else {
                     this.voices[0].setFrequencyTarget(targetFreq, params.glide_time);
@@ -1243,10 +1368,12 @@
             }
             else if (params.voice_mode === 2) { // Stereo Unison Detune Mode
                 const detuneCents = [-7.0, 7.0, -14.0, 14.0];
+                const phaseOffsets = [0.000, 0.008, 0.016, 0.024];
                 for (let i = 0; i < 4; ++i) {
                     const semiOffset = detuneCents[i] * 0.01 + this.pitchBendSemi;
                     const freq = noteToFreq(noteNumber + semiOffset);
-                    this.voices[i].noteOn(noteNumber, velocity);
+                    const vStart = clamp(sStart + phaseOffsets[i], 0.0, 0.95);
+                    this.voices[i].noteOn(noteNumber, velocity, freq, sIdx, vStart, sRev, cData);
                     this.voices[i].setFrequencyTarget(freq, params.glide_time);
                 }
             }
@@ -1263,7 +1390,7 @@
                     voiceIdx = this.findVoiceToSteal();
                 }
 
-                this.voices[voiceIdx].noteOn(noteNumber, velocity);
+                this.voices[voiceIdx].noteOn(noteNumber, velocity, 0.0, sIdx, sStart, sRev, cData);
                 this.voices[voiceIdx].setPitchBend(this.pitchBendSemi);
                 this.voices[voiceIdx].setAftertouch(this.channelPressure);
             }
@@ -1618,6 +1745,13 @@
             // Preallocate uint8 byte buffer for zero-alloc base64 telemetry
             this.scopeBytes = new Uint8Array(kTelemetryScopeSamples);
 
+            // Sample Bank & Pitcher State
+            this.selectedSampleIndex = 0;
+            this.sampleStartOffset = 0.0;
+            this.sampleReverse = false;
+            this.customAudioData = null;
+            this.customAudioName = null;
+
             this._initAutoplayListeners();
         }
 
@@ -1717,7 +1851,11 @@
                     env_attack: effParams.param_env_attack,
                     env_decay: effParams.param_env_decay,
                     env_sustain: effParams.param_env_sustain,
-                    env_release: effParams.param_env_release
+                    env_release: effParams.param_env_release,
+                    sample_index: this.selectedSampleIndex,
+                    sample_start: this.sampleStartOffset,
+                    sample_reverse: this.sampleReverse,
+                    customAudioData: this.customAudioData
                 });
 
                 // 2. Intergluteal Cleft Waveguide
@@ -1811,7 +1949,11 @@
             const effParams = applyMacroCoupling(this.params);
             this.voiceManager.handleNoteOn(noteNumber, velocity, {
                 voice_mode: Math.round(effParams.param_voice_mode),
-                glide_time: effParams.param_glide_time
+                glide_time: effParams.param_glide_time,
+                sample_index: this.selectedSampleIndex,
+                sample_start: this.sampleStartOffset,
+                sample_reverse: this.sampleReverse,
+                customAudioData: this.customAudioData
             });
         }
 
@@ -1819,7 +1961,11 @@
             const effParams = applyMacroCoupling(this.params);
             this.voiceManager.handleNoteOff(noteNumber, {
                 voice_mode: Math.round(effParams.param_voice_mode),
-                glide_time: effParams.param_glide_time
+                glide_time: effParams.param_glide_time,
+                sample_index: this.selectedSampleIndex,
+                sample_start: this.sampleStartOffset,
+                sample_reverse: this.sampleReverse,
+                customAudioData: this.customAudioData
             });
         }
 
@@ -1830,6 +1976,38 @@
         pitchBend(cents) {
             const semitones = Number(cents) / 100.0;
             this.voiceManager.setPitchBend(semitones);
+        }
+
+        setSampleIndex(index) {
+            this.selectedSampleIndex = clamp(Math.round(index), 0, 7);
+            this.customAudioData = null; // Switch to embedded sample
+        }
+
+        setSampleStart(offset) {
+            this.sampleStartOffset = clamp(Number(offset), 0.0, 1.0);
+        }
+
+        setSampleReverse(reverse) {
+            this.sampleReverse = !!reverse;
+        }
+
+        async loadCustomAudio(arrayBuffer, fileName) {
+            this.ensureAudioContext();
+            try {
+                const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+                const channelData = audioBuffer.getChannelData(0);
+                this.customAudioData = new Float32Array(channelData);
+                this.customAudioName = fileName || "Custom Audio";
+                console.log(`[WebAudioEngine] Loaded custom audio "${this.customAudioName}": ${channelData.length} samples (${(channelData.length / audioBuffer.sampleRate).toFixed(2)} s)`);
+                return {
+                    name: this.customAudioName,
+                    samples: channelData.length,
+                    duration: channelData.length / audioBuffer.sampleRate
+                };
+            } catch (err) {
+                console.error('[WebAudioEngine] Failed to decode custom audio:', err);
+                return null;
+            }
         }
 
         setParameter(paramId, value) {

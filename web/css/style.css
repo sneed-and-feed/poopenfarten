@@ -289,12 +289,36 @@ body {
 .card-header.amber { color: var(--amber-gold); border-left: 3px solid var(--amber-gold); }
 .card-header.purple { color: var(--sub-purple); border-left: 3px solid var(--sub-purple); }
 
+.card-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--neon-cyan);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .card-body {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
+  overflow-y: auto;
+}
+
+.card-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.card-body::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
 }
 
 .control-row {
@@ -362,6 +386,152 @@ select.card-select {
   font-size: 11px;
   outline: none;
   width: 100%;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+
+select.card-select:hover, select.card-select:focus {
+  border-color: var(--neon-cyan);
+}
+
+/* Sample Bank 1-8 Button Strip */
+.sample-btn-strip {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.sample-strip-btn {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 5px 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  text-align: center;
+}
+
+.sample-strip-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: #58a6ff;
+}
+
+.sample-strip-btn.active {
+  background: rgba(88, 166, 255, 0.2);
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
+}
+
+/* Sample Modifiers (Reverse & Load Audio) */
+.sample-modifiers-row {
+  display: flex;
+  flex-direction: row !important;
+  gap: 8px;
+}
+
+.pill-toggle-btn {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.12s ease;
+}
+
+.pill-toggle-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--border-active);
+}
+
+.pill-toggle-btn.active {
+  background: rgba(240, 136, 62, 0.2);
+  color: var(--amber-gold);
+  border-color: var(--amber-gold);
+  box-shadow: 0 0 8px rgba(240, 136, 62, 0.3);
+}
+
+.pill-toggle-btn.custom-drop-btn:hover {
+  border-color: var(--acid-emerald);
+  color: var(--acid-emerald);
+}
+
+/* Drag and Drop Custom Audio Overlay */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: auto;
+}
+
+.drop-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.drop-overlay-box {
+  border: 2px dashed var(--neon-cyan);
+  background: rgba(22, 27, 34, 0.9);
+  border-radius: 12px;
+  padding: 40px 60px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(88, 166, 255, 0.35);
+  animation: pulse-glow 2s infinite ease-in-out;
+  max-width: 500px;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+    border-color: var(--neon-cyan);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(57, 211, 83, 0.4);
+    border-color: var(--acid-emerald);
+  }
+}
+
+.drop-overlay-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.drop-overlay-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.drop-overlay-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
 
 /* ADSR Graph Preview */
