@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPF-42 DYNAMICS · Aeroacoustic Physical Modeling Synthesizer</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Top Studio Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-title">PPF-42 <span>DYNAMICS</span></div>
+      <div class="brand-badge">PHYSICAL MODEL</div>
+    </div>
+
+    <div class="preset-section">
+      <button id="prevPresetBtn" class="preset-nav-btn" title="Previous Preset">&lt;</button>
+      <select id="presetSelect" class="preset-select"></select>
+      <button id="nextPresetBtn" class="preset-nav-btn" title="Next Preset">&gt;</button>
+    </div>
+
+    <div class="header-status">
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        <span>AUDIO READY</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main-container">
+    <!-- Visualizer & Performance Deck -->
+    <section class="visualizer-deck">
+      <!-- Aeroacoustic Flow Particle Chamber -->
+      <div class="deck-panel">
+        <div class="deck-panel-header">
+          <span>AEROACOUSTIC PARTICLE CHAMBER</span>
+          <span style="color: var(--amber-gold);">BERNOULLI FLOW</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="particlesCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Phosphor Spectral Oscilloscope -->
+      <div class="deck-panel">
+        <div class="deck-panel-header">
+          <span>SPECTRAL OSCILLOSCOPE</span>
+          <span style="color: var(--neon-cyan);">60 FPS LIVE TRACE</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="scopeCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- 2D XY Performance Pad -->
+      <div class="deck-panel">
+        <div class="deck-panel-header">
+          <span>2D PERFORMANCE PAD</span>
+          <span id="xyCoords" style="color: var(--neon-cyan); font-family: monospace;">SQ: 50% | MOIST: 20%</span>
+        </div>
+        <div id="xyPad" class="xy-pad-container">
+          <div class="xy-graticule">
+            <div class="xy-axis-x"></div>
+            <div class="xy-axis-y"></div>
+          </div>
+          <div id="xyPuck" class="xy-puck" style="left: 50%; top: 80%;"></div>
+          <div class="xy-label y">+ DIETARY MOISTURE</div>
+          <div class="xy-label x">+ GUT SQUEEZE</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls Matrix -->
+    <section class="controls-matrix">
+      <!-- Card 1: Sphincter Mechanics -->
+      <div class="control-card">
+        <div class="card-header cyan">
+          <span>1. SPHINCTER MECHANICS</span>
+        </div>
+        <div class="card-body">
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_pressure">Colonic Drive</label>
+              <span id="param_pressure_val" class="control-value">70%</span>
+            </div>
+            <input type="range" id="param_pressure" class="accent-amber" min="0" max="1" step="0.001" value="0.70">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_tension">Tissue Elasticity</label>
+              <span id="param_tension_val" class="control-value">50%</span>
+            </div>
+            <input type="range" id="param_tension" class="accent-cyan" min="0" max="1" step="0.001" value="0.50">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_aperture">Resting Gap</label>
+              <span id="param_aperture_val" class="control-value">30%</span>
+            </div>
+            <input type="range" id="param_aperture" class="accent-cyan" min="0" max="1" step="0.001" value="0.30">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_flutter">Chaos / Flutter</label>
+              <span id="param_flutter_val" class="control-value">20%</span>
+            </div>
+            <input type="range" id="param_flutter" class="accent-amber" min="0" max="1" step="0.001" value="0.20">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="macro_squeeze">Gut Squeeze Macro</label>
+              <span id="macro_squeeze_val" class="control-value">50%</span>
+            </div>
+            <input type="range" id="macro_squeeze" class="accent-cyan" min="0" max="1" step="0.001" value="0.50">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Multiphase Wetness -->
+      <div class="control-card">
+        <div class="card-header emerald">
+          <span>2. MULTIPHASE WETNESS</span>
+        </div>
+        <div class="card-body">
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_viscosity">Fluid Viscosity</label>
+              <span id="param_viscosity_val" class="control-value">25%</span>
+            </div>
+            <input type="range" id="param_viscosity" class="accent-emerald" min="0" max="1" step="0.001" value="0.25">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_moisture">Moisture Level</label>
+              <span id="param_moisture_val" class="control-value">20%</span>
+            </div>
+            <input type="range" id="param_moisture" class="accent-emerald" min="0" max="1" step="0.001" value="0.20">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_droplet_rate">Splatter Density</label>
+              <span id="param_droplet_rate_val" class="control-value">30%</span>
+            </div>
+            <input type="range" id="param_droplet_rate" class="accent-emerald" min="0" max="1" step="0.001" value="0.30">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="macro_moisture">Dietary Moisture Macro</label>
+              <span id="macro_moisture_val" class="control-value">20%</span>
+            </div>
+            <input type="range" id="macro_moisture" class="accent-emerald" min="0" max="1" step="0.001" value="0.20">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Cavity & Space -->
+      <div class="control-card">
+        <div class="card-header amber">
+          <span>3. CAVITY & SPACE</span>
+        </div>
+        <div class="card-body">
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_cleft_damping">Boundary Damping</label>
+              <span id="param_cleft_damping_val" class="control-value">50%</span>
+            </div>
+            <input type="range" id="param_cleft_damping" class="accent-amber" min="0" max="1" step="0.001" value="0.50">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_porcelain_mix">Porcelain IR Mix</label>
+              <span id="param_porcelain_mix_val" class="control-value">35%</span>
+            </div>
+            <input type="range" id="param_porcelain_mix" class="accent-cyan" min="0" max="1" step="0.001" value="0.35">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_porcelain_size">Cavity Volume</label>
+              <span id="param_porcelain_size_val" class="control-value">1.00x</span>
+            </div>
+            <input type="range" id="param_porcelain_size" class="accent-amber" min="0.5" max="2.0" step="0.01" value="1.00">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_porcelain_model">Resonant Model</label>
+            </div>
+            <select id="param_porcelain_model" class="card-select">
+              <option value="0">Dry Chamber</option>
+              <option value="1" selected>Ceramic Bowl</option>
+              <option value="2">Water Coupled</option>
+              <option value="3">Tiled Enclosure</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Voice & Master FX -->
+      <div class="control-card">
+        <div class="card-header purple">
+          <span>4. VOICE & MASTER FX</span>
+        </div>
+        <div class="card-body">
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_voice_mode">Voice Mode</label>
+            </div>
+            <select id="param_voice_mode" class="card-select">
+              <option value="0" selected>Mono Legato</option>
+              <option value="1">Poly 8-Voice</option>
+              <option value="2">Stereo Unison Detune</option>
+            </select>
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_glide_time">Portamento Glide</label>
+              <span id="param_glide_time_val" class="control-value">50.0 ms</span>
+            </div>
+            <input type="range" id="param_glide_time" class="accent-cyan" min="0" max="500" step="0.1" value="50.0">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_sub_level">Sub Reinforcement</label>
+              <span id="param_sub_level_val" class="control-value">-12.0 dB</span>
+            </div>
+            <input type="range" id="param_sub_level" class="accent-purple" min="-60" max="6" step="0.1" value="-12.0">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_drive">Saturation Drive</label>
+              <span id="param_drive_val" class="control-value">15%</span>
+            </div>
+            <input type="range" id="param_drive" class="accent-amber" min="0" max="1" step="0.001" value="0.15">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_master_gain">Master Output</label>
+              <span id="param_master_gain_val" class="control-value">0.0 dB</span>
+            </div>
+            <input type="range" id="param_master_gain" class="accent-cyan" min="-60" max="12" step="0.1" value="0.0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5: Pressure Envelope -->
+      <div class="control-card">
+        <div class="card-header amber">
+          <span>5. PRESSURE ENVELOPE</span>
+        </div>
+        <div class="card-body">
+          <canvas id="adsrCanvas" class="adsr-preview"></canvas>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_env_attack">Attack</label>
+              <span id="param_env_attack_val" class="control-value">5.0 ms</span>
+            </div>
+            <input type="range" id="param_env_attack" class="accent-amber" min="0.1" max="200" step="0.1" value="5.0">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_env_decay">Decay</label>
+              <span id="param_env_decay_val" class="control-value">350.0 ms</span>
+            </div>
+            <input type="range" id="param_env_decay" class="accent-amber" min="10" max="2000" step="0.5" value="350.0">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_env_sustain">Sustain</label>
+              <span id="param_env_sustain_val" class="control-value">60%</span>
+            </div>
+            <input type="range" id="param_env_sustain" class="accent-cyan" min="0" max="1" step="0.001" value="0.60">
+          </div>
+
+          <div class="control-row">
+            <div class="control-label-row">
+              <label for="param_env_release">Release</label>
+              <span id="param_env_release_val" class="control-value">120.0 ms</span>
+            </div>
+            <input type="range" id="param_env_release" class="accent-amber" min="10" max="2000" step="0.5" value="120.0">
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Interactive Virtual Keyboard Strip -->
+  <footer class="keyboard-strip">
+    <div class="keyboard-octave-control">
+      <button id="octUpBtn" class="keyboard-octave-btn">+ OCT</button>
+      <div id="octaveDisplay" style="font-size: 10px; color: var(--text-dim); text-align: center;">OCT: C3</div>
+      <button id="octDownBtn" class="keyboard-octave-btn">- OCT</button>
+    </div>
+    <div id="pianoKeys" class="piano-keys"></div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/ipc_bridge.js"></script>
+  <script src="js/visualizer_particles.js"></script>
+  <script src="js/visualizer_scope.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
