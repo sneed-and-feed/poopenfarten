@@ -20,6 +20,13 @@
       <button id="nextPresetBtn" class="preset-nav-btn" title="Next Preset">&gt;</button>
     </div>
 
+    <div class="header-actions">
+      <button id="exciteBurstBtn" class="excite-burst-btn" title="Excite acoustic model burst (Spacebar)">
+        <span class="excite-icon">💨</span>
+        <span>EXCITE [SPACE]</span>
+      </button>
+    </div>
+
     <div class="header-status">
       <div class="status-badge">
         <div class="status-dot"></div>
@@ -301,17 +308,36 @@
     </section>
   </main>
 
-  <!-- Interactive Virtual Keyboard Strip -->
+  <!-- Interactive Virtual & Musical Typing Keyboard Strip -->
   <footer class="keyboard-strip">
-    <div class="keyboard-octave-control">
-      <button id="octUpBtn" class="keyboard-octave-btn">+ OCT</button>
-      <div id="octaveDisplay" style="font-size: 10px; color: var(--text-dim); text-align: center;">OCT: C3</div>
-      <button id="octDownBtn" class="keyboard-octave-btn">- OCT</button>
+    <div class="keyboard-hud">
+      <div class="keyboard-control-group">
+        <span class="hud-label">OCTAVE [Z / X]</span>
+        <div class="keyboard-btn-row">
+          <button id="octDownBtn" class="keyboard-btn" title="Octave Down (Z)">- OCT</button>
+          <span id="octaveDisplay" class="hud-value">C3</span>
+          <button id="octUpBtn" class="keyboard-btn" title="Octave Up (X)">+ OCT</button>
+        </div>
+      </div>
+      <div class="keyboard-control-group">
+        <span class="hud-label">VELOCITY [C / V]</span>
+        <div class="keyboard-btn-row">
+          <button id="velDownBtn" class="keyboard-btn" title="Velocity Down (C)">-</button>
+          <span id="velDisplay" class="hud-value">85%</span>
+          <button id="velUpBtn" class="keyboard-btn" title="Velocity Up (V)">+</button>
+        </div>
+      </div>
+      <div class="keyboard-control-group">
+        <span class="hud-label">TYPING</span>
+        <div class="typing-active-badge" id="typingBadge" title="Computer keyboard active: A-K white keys, W-P black keys">QWERTY ON</div>
+      </div>
+      <button id="panicBtn" class="keyboard-panic-btn" title="Silence all active voices (Esc)">ALL OFF [ESC]</button>
     </div>
     <div id="pianoKeys" class="piano-keys"></div>
   </footer>
 
   <!-- Scripts -->
+  <script src="js/audio_engine.js"></script>
   <script src="js/ipc_bridge.js"></script>
   <script src="js/visualizer_particles.js"></script>
   <script src="js/visualizer_scope.js"></script>

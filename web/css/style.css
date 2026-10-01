@@ -373,40 +373,146 @@ select.card-select {
   border-radius: 4px;
 }
 
-/* Virtual Keyboard Strip */
+/* Excite Burst Button in Header */
+.header-actions {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.excite-burst-btn {
+  background: linear-gradient(135deg, rgba(240, 136, 62, 0.2), rgba(88, 166, 255, 0.15));
+  border: 1px solid var(--amber-gold);
+  color: var(--amber-gold);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.12s ease;
+  box-shadow: 0 0 10px rgba(240, 136, 62, 0.2);
+}
+
+.excite-burst-btn:hover {
+  background: linear-gradient(135deg, rgba(240, 136, 62, 0.4), rgba(88, 166, 255, 0.3));
+  box-shadow: 0 0 16px rgba(240, 136, 62, 0.45);
+  transform: translateY(-1px);
+}
+
+.excite-burst-btn:active, .excite-burst-btn.firing {
+  background: var(--amber-gold);
+  color: #0d1117;
+  box-shadow: 0 0 24px var(--amber-gold);
+  transform: translateY(1px);
+}
+
+/* Keyboard Strip & HUD */
 .keyboard-strip {
-  height: 72px;
+  height: 95px;
   background-color: var(--bg-panel);
   border-top: 1px solid var(--border-subtle);
   display: flex;
-  padding: 6px 16px;
+  padding: 6px 14px;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.keyboard-octave-control {
+.keyboard-hud {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  background: rgba(13, 17, 23, 0.7);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
 }
 
-.keyboard-octave-btn {
+.keyboard-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.hud-label {
+  font-size: 8px;
+  color: var(--text-dim);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+.hud-value {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--neon-cyan);
+  font-family: monospace;
+  min-width: 28px;
+  text-align: center;
+}
+
+.keyboard-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.keyboard-btn {
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
   border-radius: 3px;
-  padding: 3px 8px;
-  font-size: 10px;
+  padding: 2px 6px;
+  font-size: 9px;
   font-weight: bold;
   cursor: pointer;
+  transition: all 0.1s ease;
 }
 
-.keyboard-octave-btn:hover {
+.keyboard-btn:hover {
   background: var(--bg-hover);
   border-color: var(--border-active);
+  color: var(--neon-cyan);
 }
 
+.keyboard-btn:active {
+  background: var(--neon-cyan);
+  color: #0d1117;
+}
+
+.typing-active-badge {
+  background: rgba(57, 211, 83, 0.15);
+  border: 1px solid var(--acid-emerald);
+  color: var(--acid-emerald);
+  font-size: 9px;
+  font-weight: bold;
+  padding: 3px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.keyboard-panic-btn {
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid rgba(248, 81, 73, 0.5);
+  color: #f85149;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.keyboard-panic-btn:hover {
+  background: #f85149;
+  color: #ffffff;
+}
+
+/* Piano Keys */
 .piano-keys {
   display: flex;
   flex: 1;
@@ -416,6 +522,7 @@ select.card-select {
   border-radius: 4px;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
+  user-select: none;
 }
 
 .white-key {
@@ -424,7 +531,12 @@ select.card-select {
   border-right: 1px solid #d0d7de;
   cursor: pointer;
   position: relative;
-  transition: background 0.08s ease;
+  transition: background 0.06s ease, transform 0.05s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 5px;
 }
 
 .white-key:last-child {
@@ -433,20 +545,87 @@ select.card-select {
 
 .white-key.active {
   background: #58a6ff !important;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 12px #58a6ff;
+  transform: translateY(1px);
+}
+
+.white-key .key-label {
+  font-family: monospace;
+  font-size: 9px;
+  font-weight: 800;
+  color: #57606a;
+  background: rgba(208, 215, 222, 0.6);
+  padding: 1px 3px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.white-key.active .key-label {
+  color: #0d1117;
+  background: #ffffff;
+}
+
+.white-key .key-note {
+  font-size: 7px;
+  color: #8c959f;
+  margin-bottom: 2px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.white-key.active .key-note {
+  color: #0d1117;
 }
 
 .black-key {
   position: absolute;
-  width: 3.2%;
+  width: 3.4%;
   height: 60%;
   background: #161b22;
   border-radius: 0 0 3px 3px;
   cursor: pointer;
   z-index: 2;
-  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.6);
-  transition: background 0.08s ease;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.8);
+  transition: background 0.06s ease, transform 0.05s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 4px;
+  border: 1px solid #30363d;
+  border-top: none;
 }
 
 .black-key.active {
   background: #f0883e !important;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4), 0 0 14px #f0883e;
+  transform: translateY(1px);
+}
+
+.black-key .key-label {
+  font-family: monospace;
+  font-size: 8px;
+  font-weight: 800;
+  color: #8b949e;
+  background: rgba(33, 38, 45, 0.9);
+  padding: 1px 3px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.black-key.active .key-label {
+  color: #0d1117;
+  background: #ffffff;
+}
+
+.black-key .key-note {
+  font-size: 7px;
+  color: #6e7681;
+  margin-bottom: 2px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.black-key.active .key-note {
+  color: #0d1117;
 }

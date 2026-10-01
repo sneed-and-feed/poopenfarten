@@ -1,13 +1,14 @@
 /**
  * PPF-42 DYNAMICS - Bi-directional C++/JavaScript IPC Bridge
  * Interfaces with JUCE 8 WebBrowserComponent backend (window.__JUCE__.backend)
- * Provides automatic fallback/simulation when running in a standalone browser.
+ * Provides seamless routing to WebAudioEngine when running standalone in browsers.
  */
 
 class IPCBridge {
     constructor() {
         this.isJuce = !!(window.__IS_JUCE__ || (window.__JUCE__ && window.__JUCE__.backend));
         this.listeners = new Map();
+        this.audioEngine = null;
         this.simTimer = null;
         this.simPhase = 0;
 
@@ -19,8 +20,21 @@ class IPCBridge {
             this.backend = window.__JUCE__.backend;
             console.log('[IPCBridge] Connected to native JUCE 8 backend.');
         } else {
-            console.log('[IPCBridge] Standalone browser mode: active simulation enabled.');
+            console.log('[IPCBridge] Standalone browser mode: WebAudio synthesis engine active.');
             this.backend = null;
+            this._initWebAudioEngine();
+        }
+    }
+
+    _initWebAudioEngine() {
+        if (typeof WebAudioEngine !== 'undefined') {
+            this.audioEngine = new WebAudioEngine();
+            this.audioEngine.onTelemetry = (frame) => {
+                this._notifyLocal('visualizerFrame', frame);
+            };
+            console.log('[IPCBridge] WebAudioEngine connected to telemetry visualizers.');
+        } else {
+            console.warn('[IPCBridge] WebAudioEngine not detected; running procedural simulation.');
             this._startSimulation();
         }
     }
@@ -47,31 +61,69 @@ class IPCBridge {
     }
 
     setParameter(paramId, value) {
-        this.emit('paramChange', { id: paramId, value: Number(value) });
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('paramChange', { id: paramId, value: Number(value) });
+        } else if (this.audioEngine) {
+            this.audioEngine.setParameter(paramId, Number(value));
+        }
     }
 
     loadPreset(presetIndex) {
-        this.emit('loadPreset', { index: Number(presetIndex) });
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('loadPreset', { index: Number(presetIndex) });
+        } else if (this.audioEngine) {
+            const presetData = this.audioEngine.loadPreset(Number(presetIndex));
+            this._notifyLocal('stateSync', {
+                currentPreset: presetData.index,
+                presetName: presetData.name,
+                params: presetData.params
+            });
+        }
     }
 
     noteOn(noteNumber, velocity = 0.8) {
-        this.emit('noteOn', { note: Math.round(noteNumber), velocity: Number(velocity) });
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('noteOn', { note: Math.round(noteNumber), velocity: Number(velocity) });
+        } else if (this.audioEngine) {
+            this.audioEngine.noteOn(Math.round(noteNumber), Number(velocity));
+        }
     }
 
     noteOff(noteNumber, velocity = 0.0) {
-        this.emit('noteOff', { note: Math.round(noteNumber), velocity: Number(velocity) });
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('noteOff', { note: Math.round(noteNumber), velocity: Number(velocity) });
+        } else if (this.audioEngine) {
+            this.audioEngine.noteOff(Math.round(noteNumber), Number(velocity));
+        }
     }
 
     allNotesOff() {
-        this.emit('allNotesOff', {});
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('allNotesOff', {});
+        } else if (this.audioEngine) {
+            this.audioEngine.allNotesOff();
+        }
     }
 
     pitchBend(cents) {
-        this.emit('pitchBend', { cents: Number(cents) });
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('pitchBend', { cents: Number(cents) });
+        } else if (this.audioEngine) {
+            this.audioEngine.pitchBend(Number(cents));
+        }
     }
 
     requestState() {
-        this.emit('requestState', {});
+        if (this.backend && typeof this.backend.emitEvent === 'function') {
+            this.emit('requestState', {});
+        } else if (this.audioEngine) {
+            const currentPreset = this.audioEngine.getCurrentPreset();
+            this._notifyLocal('stateSync', {
+                currentPreset: currentPreset,
+                presetName: this.audioEngine.getPresetName(currentPreset),
+                params: this.audioEngine.getParams()
+            });
+        }
     }
 
     _notifyLocal(eventName, data) {
@@ -88,16 +140,14 @@ class IPCBridge {
     }
 
     _startSimulation() {
-        // Generates realistic simulated relaxation oscillation frames for standalone browser testing
+        // Fallback procedural relaxation oscillation generator if Web Audio unavailable
         this.simTimer = setInterval(() => {
             this.simPhase += 0.05;
-            const f0 = 45.0; // Hz
             const N = 128;
             const bytes = new Uint8Array(N);
 
             for (let i = 0; i < N; ++i) {
                 const t = this.simPhase + (i / N) * 2.0;
-                // Asymmetric relaxation oscillation curve (sawtooth-like valve reed with Bernoulli collapse)
                 const saw = 2.0 * (t - Math.floor(t + 0.5));
                 const reed = Math.sin(t * 6.28318) * 0.7 + (saw > 0 ? 0.3 : -0.2);
                 const clamped = Math.max(-1.0, Math.min(1.0, reed));

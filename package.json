@@ -1,0 +1,19 @@
+{
+  "name": "poopenfarten-pro",
+  "version": "1.0.0",
+  "description": "PPF-42 DYNAMICS · Aeroacoustic Physical Modeling Synthesizer",
+  "main": "web/index.html",
+  "scripts": {
+    "start": "npx serve web",
+    "build": "echo \"Build complete\""
+  },
+  "keywords": [
+    "synthesizer",
+    "web-audio",
+    "physical-modeling",
+    "dsp",
+    "juce"
+  ],
+  "author": "PPF-42 DYNAMICS Team",
+  "license": "MIT"
+}

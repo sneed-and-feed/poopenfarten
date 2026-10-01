@@ -247,96 +247,191 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderAdsr();
 
-    // 6. Interactive Virtual Keyboard Strip
+    // 6. Interactive Virtual & Musical Typing Keyboard Strip
     let currentOctave = 3; // C3 to B4
+    let currentVelocity = 0.85;
     const octaveDisplay = document.getElementById('octaveDisplay');
     const octDownBtn = document.getElementById('octDownBtn');
     const octUpBtn = document.getElementById('octUpBtn');
+    const velDisplay = document.getElementById('velDisplay');
+    const velDownBtn = document.getElementById('velDownBtn');
+    const velUpBtn = document.getElementById('velUpBtn');
+    const panicBtn = document.getElementById('panicBtn');
+    const exciteBurstBtn = document.getElementById('exciteBurstBtn');
 
     function updateOctave(delta) {
         currentOctave = Math.max(1, Math.min(6, currentOctave + delta));
-        if (octaveDisplay) octaveDisplay.textContent = `OCT: C${currentOctave}`;
+        if (octaveDisplay) octaveDisplay.textContent = `C${currentOctave}`;
         buildKeyboard();
+    }
+
+    function updateVelocity(delta) {
+        currentVelocity = Math.max(0.1, Math.min(1.0, currentVelocity + delta));
+        if (velDisplay) velDisplay.textContent = `${Math.round(currentVelocity * 100)}%`;
     }
 
     if (octDownBtn) octDownBtn.addEventListener('click', () => updateOctave(-1));
     if (octUpBtn) octUpBtn.addEventListener('click', () => updateOctave(1));
+    if (velDownBtn) velDownBtn.addEventListener('click', () => updateVelocity(-0.1));
+    if (velUpBtn) velUpBtn.addEventListener('click', () => updateVelocity(0.1));
+
+    if (panicBtn) {
+        panicBtn.addEventListener('click', () => {
+            window.ipcBridge.allNotesOff();
+            document.querySelectorAll('.piano-keys .active').forEach(k => k.classList.remove('active'));
+            activeNotes.clear();
+        });
+    }
+
+    // Excite / Colonic Pressure Burst
+    let burstTimer = null;
+    function triggerExciteBurst() {
+        if (exciteBurstBtn) exciteBurstBtn.classList.add('firing');
+        const baseNote = (currentOctave + 1) * 12;
+        // Pitch variation around root C for visceral punch
+        const burstNote = baseNote;
+        window.ipcBridge.noteOn(burstNote, 1.0);
+
+        const keyElem = document.querySelector(`.piano-keys [data-note="${burstNote}"]`);
+        if (keyElem) keyElem.classList.add('active');
+
+        if (burstTimer) clearTimeout(burstTimer);
+        burstTimer = setTimeout(() => {
+            window.ipcBridge.noteOff(burstNote, 0.0);
+            if (keyElem) keyElem.classList.remove('active');
+            if (exciteBurstBtn) exciteBurstBtn.classList.remove('firing');
+        }, 160);
+    }
+
+    if (exciteBurstBtn) {
+        exciteBurstBtn.addEventListener('click', triggerExciteBurst);
+    }
 
     const keyboardContainer = document.getElementById('pianoKeys');
+    let activeNotes = new Set();
+
+    const triggerNoteOn = (note) => {
+        if (!activeNotes.has(note)) {
+            activeNotes.add(note);
+            window.ipcBridge.noteOn(note, currentVelocity);
+            const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
+            if (key) key.classList.add('active');
+        }
+    };
+
+    const triggerNoteOff = (note) => {
+        if (activeNotes.has(note)) {
+            activeNotes.delete(note);
+            window.ipcBridge.noteOff(note);
+            const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
+            if (key) key.classList.remove('active');
+        }
+    };
+
+    // Computer typing key to semitone offset map
+    const TYPING_KEY_MAP = {
+        'a': 0,  'w': 1,  's': 2,  'e': 3,  'd': 4,  'f': 5,  't': 6,
+        'g': 7,  'y': 8,  'h': 9,  'u': 10, 'j': 11, 'k': 12, 'o': 13,
+        'l': 14, 'p': 15, ';': 16, "'": 17
+    };
+
     function buildKeyboard() {
         if (!keyboardContainer) return;
         keyboardContainer.innerHTML = '';
 
         const baseNote = (currentOctave + 1) * 12; // C3 = 48 if octave=3
-        const numWhiteKeys = 14; // 2 octaves of white keys
-        const whiteKeyNotes = [];
-
-        // Build 2 octaves: C, D, E, F, G, A, B, C, D, E, F, G, A, B
-        const whiteOffsets = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
-        const blackDefs = [
-            { offset: 1, whiteIdx: 0 },
-            { offset: 3, whiteIdx: 1 },
-            { offset: 6, whiteIdx: 3 },
-            { offset: 8, whiteIdx: 4 },
-            { offset: 10, whiteIdx: 5 },
-            { offset: 13, whiteIdx: 7 },
-            { offset: 15, whiteIdx: 8 },
-            { offset: 18, whiteIdx: 10 },
-            { offset: 20, whiteIdx: 11 },
-            { offset: 22, whiteIdx: 12 }
+        const whiteOffsets = [
+            { semitone: 0,  noteName: `C${currentOctave}`,     key: 'A' },
+            { semitone: 2,  noteName: `D${currentOctave}`,     key: 'S' },
+            { semitone: 4,  noteName: `E${currentOctave}`,     key: 'D' },
+            { semitone: 5,  noteName: `F${currentOctave}`,     key: 'F' },
+            { semitone: 7,  noteName: `G${currentOctave}`,     key: 'G' },
+            { semitone: 9,  noteName: `A${currentOctave}`,     key: 'H' },
+            { semitone: 11, noteName: `B${currentOctave}`,     key: 'J' },
+            { semitone: 12, noteName: `C${currentOctave + 1}`, key: 'K' },
+            { semitone: 14, noteName: `D${currentOctave + 1}`, key: 'L' },
+            { semitone: 16, noteName: `E${currentOctave + 1}`, key: ';' },
+            { semitone: 17, noteName: `F${currentOctave + 1}`, key: "'" },
+            { semitone: 19, noteName: `G${currentOctave + 1}`, key: '' },
+            { semitone: 21, noteName: `A${currentOctave + 1}`, key: '' },
+            { semitone: 23, noteName: `B${currentOctave + 1}`, key: '' }
         ];
 
-        let activeNotes = new Set();
+        const blackDefs = [
+            { semitone: 1,  whiteIdx: 0,  noteName: `C#${currentOctave}`,     key: 'W' },
+            { semitone: 3,  whiteIdx: 1,  noteName: `D#${currentOctave}`,     key: 'E' },
+            { semitone: 6,  whiteIdx: 3,  noteName: `F#${currentOctave}`,     key: 'T' },
+            { semitone: 8,  whiteIdx: 4,  noteName: `G#${currentOctave}`,     key: 'Y' },
+            { semitone: 10, whiteIdx: 5,  noteName: `A#${currentOctave}`,     key: 'U' },
+            { semitone: 13, whiteIdx: 7,  noteName: `C#${currentOctave + 1}`, key: 'O' },
+            { semitone: 15, whiteIdx: 8,  noteName: `D#${currentOctave + 1}`, key: 'P' },
+            { semitone: 18, whiteIdx: 10, noteName: `F#${currentOctave + 1}`, key: '' },
+            { semitone: 20, whiteIdx: 11, noteName: `G#${currentOctave + 1}`, key: '' },
+            { semitone: 22, whiteIdx: 12, noteName: `A#${currentOctave + 1}`, key: '' }
+        ];
 
-        const triggerNoteOn = (note) => {
-            if (!activeNotes.has(note)) {
-                activeNotes.add(note);
-                window.ipcBridge.noteOn(note, 0.85);
-            }
-        };
-
-        const triggerNoteOff = (note) => {
-            if (activeNotes.has(note)) {
-                activeNotes.delete(note);
-                window.ipcBridge.noteOff(note);
-            }
-        };
-
+        // 1. Render White Keys
         for (let i = 0; i < whiteOffsets.length; ++i) {
-            const note = baseNote + whiteOffsets[i];
+            const def = whiteOffsets[i];
+            const note = baseNote + def.semitone;
             const key = document.createElement('div');
             key.className = 'white-key';
             key.dataset.note = note;
 
-            key.addEventListener('mousedown', () => { key.classList.add('active'); triggerNoteOn(note); });
-            key.addEventListener('mouseup', () => { key.classList.remove('active'); triggerNoteOff(note); });
-            key.addEventListener('mouseleave', () => { key.classList.remove('active'); triggerNoteOff(note); });
+            if (def.noteName) {
+                const noteSpan = document.createElement('span');
+                noteSpan.className = 'key-note';
+                noteSpan.textContent = def.noteName;
+                key.appendChild(noteSpan);
+            }
+
+            if (def.key) {
+                const badge = document.createElement('span');
+                badge.className = 'key-label';
+                badge.textContent = def.key;
+                key.appendChild(badge);
+            }
+
+            key.addEventListener('mousedown', () => triggerNoteOn(note));
+            key.addEventListener('mouseup', () => triggerNoteOff(note));
+            key.addEventListener('mouseleave', () => triggerNoteOff(note));
 
             keyboardContainer.appendChild(key);
         }
 
-        // Add black keys overlaid
+        // 2. Render Black Keys
         const whiteKeyWidthPercent = 100 / whiteOffsets.length;
-        blackDefs.forEach(({ offset, whiteIdx }) => {
-            const note = baseNote + offset;
+        blackDefs.forEach(def => {
+            const note = baseNote + def.semitone;
             const key = document.createElement('div');
             key.className = 'black-key';
             key.dataset.note = note;
-            key.style.left = `${(whiteIdx + 1) * whiteKeyWidthPercent - 1.6}%`;
+            key.style.left = `${(def.whiteIdx + 1) * whiteKeyWidthPercent - 1.7}%`;
+
+            if (def.noteName) {
+                const noteSpan = document.createElement('span');
+                noteSpan.className = 'key-note';
+                noteSpan.textContent = def.noteName;
+                key.appendChild(noteSpan);
+            }
+
+            if (def.key) {
+                const badge = document.createElement('span');
+                badge.className = 'key-label';
+                badge.textContent = def.key;
+                key.appendChild(badge);
+            }
 
             key.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
-                key.classList.add('active');
                 triggerNoteOn(note);
             });
             key.addEventListener('mouseup', (e) => {
                 e.stopPropagation();
-                key.classList.remove('active');
                 triggerNoteOff(note);
             });
             key.addEventListener('mouseleave', (e) => {
                 e.stopPropagation();
-                key.classList.remove('active');
                 triggerNoteOff(note);
             });
 
@@ -344,6 +439,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     buildKeyboard();
+
+    // 7. Global Computer Keyboard Listeners (Musical Typing)
+    window.addEventListener('keydown', (e) => {
+        // Ignore typing when focused inside an input or select
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.repeat) return;
+
+        const k = e.key.toLowerCase();
+
+        if (e.code === 'Space') {
+            e.preventDefault();
+            triggerExciteBurst();
+            return;
+        }
+
+        if (k === 'z') {
+            updateOctave(-1);
+            return;
+        }
+        if (k === 'x') {
+            updateOctave(1);
+            return;
+        }
+        if (k === 'c') {
+            updateVelocity(-0.1);
+            return;
+        }
+        if (k === 'v') {
+            updateVelocity(0.1);
+            return;
+        }
+        if (e.key === 'Escape') {
+            window.ipcBridge.allNotesOff();
+            document.querySelectorAll('.piano-keys .active').forEach(el => el.classList.remove('active'));
+            activeNotes.clear();
+            return;
+        }
+
+        if (k in TYPING_KEY_MAP) {
+            e.preventDefault();
+            const baseNote = (currentOctave + 1) * 12;
+            const note = baseNote + TYPING_KEY_MAP[k];
+            triggerNoteOn(note);
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+        const k = e.key.toLowerCase();
+        if (k in TYPING_KEY_MAP) {
+            e.preventDefault();
+            const baseNote = (currentOctave + 1) * 12;
+            const note = baseNote + TYPING_KEY_MAP[k];
+            triggerNoteOff(note);
+        }
+    });
 
     // 7. IPC Telemetry & Parameter Listeners
     window.ipcBridge.addEventListener('visualizerFrame', (frame) => {
