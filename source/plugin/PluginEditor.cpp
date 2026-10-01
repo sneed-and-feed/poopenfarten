@@ -55,6 +55,33 @@ juce::WebBrowserComponent::Options PPF42AudioProcessorEditor::createWebOptions(P
         .withEventListener("pitchBend", [&editor](const juce::var& data) {
             editor.handlePitchBendFromWeb(data);
         })
+        .withEventListener("selectSample", [&editor](const juce::var& data) {
+            int idx = 0;
+            if (data.isObject())
+                idx = static_cast<int>(data.getProperty("index", 0));
+            else if (data.isInt() || data.isInt64() || data.isDouble())
+                idx = static_cast<int>(data);
+            if (auto* param = editor.processorRef.getAPVTS().getParameter(ParamIDs::param_sample_index.data()))
+                param->setValueNotifyingHost(param->convertTo0to1(static_cast<float>(idx)));
+        })
+        .withEventListener("setSampleStart", [&editor](const juce::var& data) {
+            float off = 0.0f;
+            if (data.isObject())
+                off = static_cast<float>(data.getProperty("offset", 0.0));
+            else if (data.isDouble() || data.isInt())
+                off = static_cast<float>(data);
+            if (auto* param = editor.processorRef.getAPVTS().getParameter(ParamIDs::param_sample_start.data()))
+                param->setValueNotifyingHost(param->convertTo0to1(off));
+        })
+        .withEventListener("setSampleReverse", [&editor](const juce::var& data) {
+            bool rev = false;
+            if (data.isObject())
+                rev = static_cast<bool>(data.getProperty("reverse", false));
+            else if (data.isBool())
+                rev = static_cast<bool>(data);
+            if (auto* param = editor.processorRef.getAPVTS().getParameter(ParamIDs::param_sample_reverse.data()))
+                param->setValueNotifyingHost(rev ? 1.0f : 0.0f);
+        })
         .withEventListener("requestState", [&editor](const juce::var& /*data*/) {
             editor.syncAllParametersToWeb();
         });
@@ -191,12 +218,20 @@ void PPF42AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& data)
     if (!data.isObject())
         return;
 
-    const juce::String id = data.getProperty("id", "").toString();
+    juce::String id = data.getProperty("id", "").toString();
     const float val = static_cast<float>(data.getProperty("value", 0.0));
 
     if (auto* param = processorRef.getAPVTS().getParameter(id))
     {
         param->setValueNotifyingHost(param->convertTo0to1(val));
+    }
+    else if (!id.startsWith("param_") && !id.startsWith("macro_"))
+    {
+        const juce::String prefixedId = "param_" + id;
+        if (auto* param2 = processorRef.getAPVTS().getParameter(prefixedId))
+        {
+            param2->setValueNotifyingHost(param2->convertTo0to1(val));
+        }
     }
 }
 
@@ -269,7 +304,13 @@ void PPF42AudioProcessorEditor::syncAllParametersToWeb()
     {
         if (auto* raw = apvts.getRawParameterValue(meta.apvtsId))
         {
-            paramsList->setProperty(meta.apvtsId, raw->load(std::memory_order_relaxed));
+            const float val = raw->load(std::memory_order_relaxed);
+            paramsList->setProperty(meta.apvtsId, val);
+            const juce::String sId(meta.apvtsId);
+            if (sId.startsWith("param_"))
+            {
+                paramsList->setProperty(sId.substring(6), val);
+            }
         }
     }
 

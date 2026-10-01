@@ -69,7 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const audioFileInput = document.getElementById('audioFileInput');
     const dropOverlay = document.getElementById('dropOverlay');
 
-    let currentSampleIndex = 0;
+    const sampleAuditionBtn = document.getElementById('sampleAuditionBtn');
+    let currentSampleIndex = 3; // Default to Slot 4: Iconic Meme (4gcs5k8n-FY)
     let isSampleReverse = false;
 
     function selectSampleIndex(idx) {
@@ -101,6 +102,26 @@ document.addEventListener('DOMContentLoaded', () => {
         window.ipcBridge.selectSample(currentSampleIndex);
     }
 
+    function auditionSample(idx) {
+        selectSampleIndex(idx);
+        const burstNote = 48; // Root pitch C3
+        window.ipcBridge.noteOn(burstNote, currentVelocity || 0.95);
+
+        const keyElem = document.querySelector(`.piano-keys [data-note="${burstNote}"]`);
+        if (keyElem) keyElem.classList.add('active');
+        if (sampleAuditionBtn) sampleAuditionBtn.classList.add('firing');
+
+        if (burstTimer) clearTimeout(burstTimer);
+        const sample = window.SampleBank ? window.SampleBank.getSample(currentSampleIndex) : null;
+        const durMs = sample ? Math.max(1200, Math.round((sample.numSamples / sample.sampleRate) * 1000 + 200)) : 1800;
+
+        burstTimer = setTimeout(() => {
+            window.ipcBridge.noteOff(burstNote, 0.0);
+            if (keyElem) keyElem.classList.remove('active');
+            if (sampleAuditionBtn) sampleAuditionBtn.classList.remove('firing');
+        }, durMs);
+    }
+
     if (window.SampleBank && sampleSelect) {
         sampleSelect.innerHTML = '';
         window.SampleBank.samples.forEach((sample) => {
@@ -112,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sampleSelect.addEventListener('change', (e) => {
             if (e.target.value === 'custom') return;
-            selectSampleIndex(parseInt(e.target.value, 10));
+            auditionSample(parseInt(e.target.value, 10));
         });
     }
 
@@ -121,8 +142,14 @@ document.addEventListener('DOMContentLoaded', () => {
         stripBtns.forEach((btn) => {
             btn.addEventListener('click', () => {
                 const idx = parseInt(btn.dataset.index, 10);
-                selectSampleIndex(idx);
+                auditionSample(idx);
             });
+        });
+    }
+
+    if (sampleAuditionBtn) {
+        sampleAuditionBtn.addEventListener('click', () => {
+            auditionSample(currentSampleIndex);
         });
     }
 
@@ -133,6 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
             window.ipcBridge.setSampleReverse(isSampleReverse);
         });
     }
+
+    // Initialize default sample selection (Slot 4: Iconic Meme)
+    selectSampleIndex(3);
 
     async function loadAudioBuffer(arrayBuffer, name) {
         const result = await window.ipcBridge.loadCustomAudio(arrayBuffer, name);
@@ -448,19 +478,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerExciteBurst() {
         if (exciteBurstBtn) exciteBurstBtn.classList.add('firing');
         const baseNote = (currentOctave + 1) * 12;
-        // Pitch variation around root C for visceral punch
         const burstNote = baseNote;
-        window.ipcBridge.noteOn(burstNote, 1.0);
+        window.ipcBridge.noteOn(burstNote, currentVelocity || 0.95);
 
         const keyElem = document.querySelector(`.piano-keys [data-note="${burstNote}"]`);
         if (keyElem) keyElem.classList.add('active');
 
         if (burstTimer) clearTimeout(burstTimer);
+        const sample = window.SampleBank ? window.SampleBank.getSample(currentSampleIndex) : null;
+        const durMs = sample ? Math.max(1200, Math.round((sample.numSamples / sample.sampleRate) * 1000 + 200)) : 1800;
+
         burstTimer = setTimeout(() => {
             window.ipcBridge.noteOff(burstNote, 0.0);
             if (keyElem) keyElem.classList.remove('active');
             if (exciteBurstBtn) exciteBurstBtn.classList.remove('firing');
-        }, 160);
+        }, durMs);
     }
 
     if (exciteBurstBtn) {
@@ -469,11 +501,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const keyboardContainer = document.getElementById('pianoKeys');
     let activeNotes = new Set();
+    const noteStartTimes = new Map();
 
     const triggerNoteOn = (note) => {
         if (!activeNotes.has(note)) {
             activeNotes.add(note);
-            window.ipcBridge.noteOn(note, currentVelocity);
+            noteStartTimes.set(note, performance.now());
+            window.ipcBridge.noteOn(note, currentVelocity || 0.85);
             const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
             if (key) key.classList.add('active');
         }
@@ -482,9 +516,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const triggerNoteOff = (note) => {
         if (activeNotes.has(note)) {
             activeNotes.delete(note);
-            window.ipcBridge.noteOff(note);
-            const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
-            if (key) key.classList.remove('active');
+            const startT = noteStartTimes.get(note) || 0;
+            const elapsed = performance.now() - startT;
+            const minHold = 450; // Give quick taps at least 450ms body before release
+            if (elapsed < minHold) {
+                setTimeout(() => {
+                    window.ipcBridge.noteOff(note);
+                    const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
+                    if (key) key.classList.remove('active');
+                }, minHold - elapsed);
+            } else {
+                window.ipcBridge.noteOff(note);
+                const key = document.querySelector(`.piano-keys [data-note="${note}"]`);
+                if (key) key.classList.remove('active');
+            }
         }
     };
 
@@ -679,15 +724,15 @@ document.addEventListener('DOMContentLoaded', () => {
             select.value = Math.round(val);
         }
 
-        if (id === 'sample_index') {
+        if (id === 'sample_index' || id === 'param_sample_index') {
             selectSampleIndex(val);
-        } else if (id === 'sample_start') {
+        } else if (id === 'sample_start' || id === 'param_sample_start') {
             const startSlider = document.getElementById('param_sample_start');
             if (startSlider) {
                 startSlider.value = val;
                 updateLabel('param_sample_start', val);
             }
-        } else if (id === 'sample_reverse') {
+        } else if (id === 'sample_reverse' || id === 'param_sample_reverse') {
             isSampleReverse = !!val;
             if (sampleReverseBtn) {
                 sampleReverseBtn.classList.toggle('active', isSampleReverse);
@@ -727,19 +772,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (typeof data.params['sample_index'] !== 'undefined') {
-                selectSampleIndex(data.params['sample_index']);
+            const sIdx = typeof data.params['sample_index'] !== 'undefined' ? data.params['sample_index'] : data.params['param_sample_index'];
+            if (typeof sIdx !== 'undefined') {
+                selectSampleIndex(sIdx);
             }
-            if (typeof data.params['sample_start'] !== 'undefined') {
-                const sVal = data.params['sample_start'];
+            const sVal = typeof data.params['sample_start'] !== 'undefined' ? data.params['sample_start'] : data.params['param_sample_start'];
+            if (typeof sVal !== 'undefined') {
                 const startSlider = document.getElementById('param_sample_start');
                 if (startSlider) {
                     startSlider.value = sVal;
                     updateLabel('param_sample_start', sVal);
                 }
             }
-            if (typeof data.params['sample_reverse'] !== 'undefined') {
-                isSampleReverse = !!data.params['sample_reverse'];
+            const sRev = typeof data.params['sample_reverse'] !== 'undefined' ? data.params['sample_reverse'] : data.params['param_sample_reverse'];
+            if (typeof sRev !== 'undefined') {
+                isSampleReverse = !!sRev;
                 if (sampleReverseBtn) {
                     sampleReverseBtn.classList.toggle('active', isSampleReverse);
                 }

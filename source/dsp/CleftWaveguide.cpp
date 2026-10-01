@@ -46,8 +46,8 @@ float CleftWaveguide::processSample(float input, float damping) noexcept {
     mDampingZ1 += (1.0f - dampCutoff) * (delayed - mDampingZ1);
     mDampingZ1 = flushDenormal(mDampingZ1);
 
-    // Feedback comb gain: guaranteed <= 0.85 for unconditional stability
-    const float gCleft = std::clamp(0.65f * (1.0f - 0.45f * safeDamping), 0.0f, 0.85f);
+    // Feedback comb gain: safe smooth boundary reflection
+    const float gCleft = std::clamp(0.35f * (1.0f - 0.50f * safeDamping), 0.0f, 0.45f);
     const float feedback = gCleft * mDampingZ1;
 
     // Write sum to delay line
@@ -56,7 +56,7 @@ float CleftWaveguide::processSample(float input, float damping) noexcept {
     mWriteIdx = (mWriteIdx + 1) & kDelayMask;
 
     // Direct output
-    const float out = flushDenormal(input + feedback * 0.75f);
+    const float out = flushDenormal(input + feedback * 0.40f);
 
     // Track smoothed resonance energy for visualizer telemetry
     const float sampleEnergy = out * out;

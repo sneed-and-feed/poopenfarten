@@ -45,7 +45,7 @@ struct ParameterSnapshot {
     float env_release     { 120.0f }; // Release in ms [10.0, 2000.0]
 
     // G. Sample Bank & Pitcher Controls
-    int   sample_index    { 0 };      // 0 to 7 (8 authentic sound effects)
+    int   sample_index    { 3 };      // 0 to 7 (8 authentic sound effects, default 3: fartmeme)
     float sample_start    { 0.0f };   // Start offset [0.0, 1.0]
     int   sample_reverse  { 0 };      // 0: Forward, 1: Reverse
 };

@@ -117,6 +117,7 @@ class IPCBridge {
         const idx = Math.max(0, Math.min(7, Math.round(sampleIndex)));
         if (this.backend && typeof this.backend.emitEvent === 'function') {
             this.emit('selectSample', { index: idx });
+            this.emit('paramChange', { id: 'param_sample_index', value: idx });
             this.emit('paramChange', { id: 'sample_index', value: idx });
         }
         if (this.audioEngine) {
@@ -128,6 +129,7 @@ class IPCBridge {
         const off = Math.max(0.0, Math.min(1.0, Number(offset)));
         if (this.backend && typeof this.backend.emitEvent === 'function') {
             this.emit('setSampleStart', { offset: off });
+            this.emit('paramChange', { id: 'param_sample_start', value: off });
             this.emit('paramChange', { id: 'sample_start', value: off });
         }
         if (this.audioEngine) {
@@ -139,6 +141,7 @@ class IPCBridge {
         const rev = !!reverse;
         if (this.backend && typeof this.backend.emitEvent === 'function') {
             this.emit('setSampleReverse', { reverse: rev });
+            this.emit('paramChange', { id: 'param_sample_reverse', value: rev ? 1 : 0 });
             this.emit('paramChange', { id: 'sample_reverse', value: rev ? 1 : 0 });
         }
         if (this.audioEngine) {

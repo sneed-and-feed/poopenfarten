@@ -184,8 +184,8 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     const float squelchOut = mSquelchFilter.process(squelchInput);
 
     const float moistureAmt = std::clamp(params.moisture, 0.0f, 1.0f);
-    const float squelchMix = 0.40f + 0.60f * moistureAmt;
-    const float wetAcousticSignal = sampleWave * 0.85f + fluidWave * 0.20f + squelchOut * (1.6f * squelchMix);
+    const float squelchMix = moistureAmt * moistureAmt;
+    const float wetAcousticSignal = sampleWave + fluidWave * (0.35f * moistureAmt) + squelchOut * (0.75f * squelchMix);
 
     // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
     // (Visceral flesh thump, completely replacing electronic sine wave)
@@ -200,7 +200,7 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     // Low-pass filter to extract visceral sub-bass frequencies
     const float subCutoff = std::clamp(effectiveFreq * 1.35f, 32.0f, 95.0f);
     mSubThumpFilter.setCutoff(mSampleRate, subCutoff);
-    const float visceralThump = mSubThumpFilter.process(satThump) * 2.8f;
+    const float visceralThump = mSubThumpFilter.process(satThump) * 1.5f;
     const float subBassWave = visceralThump * subGain * envLevel;
 
     // 7. Voice summation shaped by dynamic pressure envelope

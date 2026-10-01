@@ -30,6 +30,9 @@ namespace ParamIDs {
     inline constexpr std::string_view param_env_decay       = "param_env_decay";
     inline constexpr std::string_view param_env_sustain     = "param_env_sustain";
     inline constexpr std::string_view param_env_release     = "param_env_release";
+    inline constexpr std::string_view param_sample_index    = "param_sample_index";
+    inline constexpr std::string_view param_sample_start    = "param_sample_start";
+    inline constexpr std::string_view param_sample_reverse  = "param_sample_reverse";
 }
 
 struct ParamMetadata {
@@ -45,7 +48,7 @@ struct ParamMetadata {
     int numChoices;
 };
 
-inline constexpr size_t kNumParams = 22;
+inline constexpr size_t kNumParams = 25;
 
 extern const std::array<ParamMetadata, kNumParams> kParamRegistry;
 

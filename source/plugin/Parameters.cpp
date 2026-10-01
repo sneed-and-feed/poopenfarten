@@ -25,6 +25,9 @@ const std::array<ParamMetadata, kNumParams> kParamRegistry = {{
     { "param_env_decay",       "Pressure Decay",     "Envelope",  10.0f, 2000.0f, 350.0f,0.35f, "ms",  false, 0 },
     { "param_env_sustain",     "Pressure Sustain",   "Envelope",  0.0f,  1.0f,    0.60f, 1.0f,  "%",   false, 0 },
     { "param_env_release",     "Pressure Release",   "Envelope",  10.0f, 2000.0f, 120.0f,0.35f, "ms",  false, 0 },
+    { "param_sample_index",    "Sample Slot",        "Sample",    0.0f,  7.0f,    3.0f,  1.0f,  "",    true,  8 },
+    { "param_sample_start",    "Start Offset",       "Sample",    0.0f,  1.0f,    0.00f, 1.0f,  "%",   false, 0 },
+    { "param_sample_reverse",  "Sample Reverse",     "Sample",    0.0f,  1.0f,    0.00f, 1.0f,  "",    true,  2 },
 }};
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -128,6 +131,29 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         juce::ParameterID{ParamIDs::param_env_release.data(), 1}, "Pressure Release",
         juce::NormalisableRange<float>(10.0f, 2000.0f, 0.5f, 0.35f), 120.0f));
 
+    // 7. Sample Bank & Pitcher
+    juce::StringArray sampleChoices {
+        "1: Dry Staccato Rip",
+        "2: Extended Gaseous Rip",
+        "3: Porcelain Room Slam",
+        "4: Iconic Wet Meme (4gcs5k8n-FY)",
+        "5: Juicy Squelch Pop",
+        "6: Flapping Flutter",
+        "7: Crisp Percussive Slap",
+        "8: Multiphase Splatter"
+    };
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{ParamIDs::param_sample_index.data(), 1}, "Sample Slot",
+        sampleChoices, 3));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ParamIDs::param_sample_start.data(), 1}, "Start Offset",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f), 0.00f));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{ParamIDs::param_sample_reverse.data(), 1}, "Sample Reverse",
+        false));
+
     return { params.begin(), params.end() };
 }
 
@@ -169,6 +195,9 @@ ParameterSnapshot createSnapshotFromAPVTS(const juce::AudioProcessorValueTreeSta
     snap.env_decay       = getFloat(ParamIDs::param_env_decay, 350.0f);
     snap.env_sustain     = getFloat(ParamIDs::param_env_sustain, 0.60f);
     snap.env_release     = getFloat(ParamIDs::param_env_release, 120.0f);
+    snap.sample_index    = getInt(ParamIDs::param_sample_index, 3);
+    snap.sample_start    = getFloat(ParamIDs::param_sample_start, 0.0f);
+    snap.sample_reverse  = getInt(ParamIDs::param_sample_reverse, 0);
 
     return snap;
 }

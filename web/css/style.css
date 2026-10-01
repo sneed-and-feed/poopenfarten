@@ -472,6 +472,23 @@ select.card-select:hover, select.card-select:focus {
   color: var(--acid-emerald);
 }
 
+.pill-toggle-btn.audition-btn {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: rgba(88, 166, 255, 0.4);
+  color: var(--neon-cyan);
+  font-weight: 700;
+}
+.pill-toggle-btn.audition-btn:hover {
+  background: rgba(88, 166, 255, 0.3);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+}
+.pill-toggle-btn.audition-btn.firing {
+  background: var(--neon-cyan);
+  color: #0d1117;
+  box-shadow: 0 0 16px var(--neon-cyan);
+}
+
 /* Drag and Drop Custom Audio Overlay */
 .drop-overlay {
   position: fixed;

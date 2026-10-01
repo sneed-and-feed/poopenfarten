@@ -974,8 +974,8 @@
             const squelchOut = this.squelchFilter.process(squelchInput);
 
             const moistureAmt = clamp(params.moisture, 0.0, 1.0);
-            const squelchMix = 0.40 + 0.60 * moistureAmt;
-            const wetAcousticSignal = sampleWave * 0.85 + fluidWave * 0.20 + squelchOut * (1.6 * squelchMix);
+            const squelchMix = moistureAmt * moistureAmt;
+            const wetAcousticSignal = sampleWave + fluidWave * (0.35 * moistureAmt) + squelchOut * (0.75 * squelchMix);
 
             // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
             const subGain = dbToGain(params.sub_level);
@@ -987,7 +987,7 @@
 
             const subCutoff = clamp(effectiveFreq * 1.35, 32.0, 95.0);
             this.subThumpFilter.setCutoff(this.sampleRate, subCutoff);
-            const visceralThump = this.subThumpFilter.process(satThump) * 2.8;
+            const visceralThump = this.subThumpFilter.process(satThump) * 1.5;
             const subBassWave = visceralThump * subGain * envLevel;
 
             // 7. Voice summation shaped by dynamic pressure envelope
@@ -1073,15 +1073,15 @@
             this.dampingZ1 += (1.0 - dampCutoff) * (delayed - this.dampingZ1);
             this.dampingZ1 = flushDenormal(this.dampingZ1);
 
-            // Feedback comb gain (stable <= 0.85)
-            const gCleft = clamp(0.65 * (1.0 - 0.45 * safeDamping), 0.0, 0.85);
+            // Feedback comb gain: safe smooth boundary reflection
+            const gCleft = clamp(0.35 * (1.0 - 0.50 * safeDamping), 0.0, 0.45);
             const feedback = gCleft * this.dampingZ1;
 
             const toDelay = flushDenormal(input + feedback);
             this.delayLine[this.writeIdx] = toDelay;
             this.writeIdx = (this.writeIdx + 1) & this.kDelayMask;
 
-            const out = flushDenormal(input + feedback * 0.75);
+            const out = flushDenormal(input + feedback * 0.40);
 
             // Track smoothed resonance energy for visualizer telemetry
             const sampleEnergy = out * out;
@@ -1585,18 +1585,20 @@
         {
             index: 0,
             name: "01 - Clean Continental Purr",
+            sample_index: 3,
             params: {
                 param_pressure: 0.65, param_tension: 0.42, param_aperture: 0.38, param_flutter: 0.35,
-                param_viscosity: 0.50, param_moisture: 0.72, param_droplet_rate: 0.68,
-                param_cleft_damping: 0.45, param_porcelain_mix: 0.28, param_porcelain_size: 1.05, param_porcelain_model: 1,
-                param_voice_mode: 0, param_glide_time: 35.0, param_sub_level: -3.0, param_drive: 0.22, param_master_gain: 0.00,
-                macro_squeeze: 0.45, macro_moisture: 0.70,
+                param_viscosity: 0.50, param_moisture: 0.25, param_droplet_rate: 0.40,
+                param_cleft_damping: 0.55, param_porcelain_mix: 0.20, param_porcelain_size: 1.00, param_porcelain_model: 1,
+                param_voice_mode: 0, param_glide_time: 35.0, param_sub_level: -3.0, param_drive: 0.15, param_master_gain: 0.00,
+                macro_squeeze: 0.45, macro_moisture: 0.25,
                 param_env_attack: 8.0, param_env_decay: 650.0, param_env_sustain: 0.40, param_env_release: 180.0
             }
         },
         {
             index: 1,
             name: "02 - High-Tension Squeaker",
+            sample_index: 6,
             params: {
                 param_pressure: 0.85, param_tension: 0.92, param_aperture: 0.08, param_flutter: 0.18,
                 param_viscosity: 0.12, param_moisture: 0.15, param_droplet_rate: 0.10,
@@ -1609,6 +1611,7 @@
         {
             index: 2,
             name: "03 - Viscous Multiphase Splatter",
+            sample_index: 7,
             params: {
                 param_pressure: 0.78, param_tension: 0.40, param_aperture: 0.45, param_flutter: 0.40,
                 param_viscosity: 0.85, param_moisture: 0.80, param_droplet_rate: 0.82,
@@ -1621,6 +1624,7 @@
         {
             index: 3,
             name: "04 - Visceral Sub-Rumble (18 Hz)",
+            sample_index: 1,
             params: {
                 param_pressure: 0.90, param_tension: 0.12, param_aperture: 0.58, param_flutter: 0.30,
                 param_viscosity: 0.35, param_moisture: 0.28, param_droplet_rate: 0.22,
@@ -1633,6 +1637,7 @@
         {
             index: 4,
             name: "05 - Flutter-Tongue Stutter",
+            sample_index: 5,
             params: {
                 param_pressure: 0.75, param_tension: 0.48, param_aperture: 0.32, param_flutter: 0.95,
                 param_viscosity: 0.28, param_moisture: 0.32, param_droplet_rate: 0.28,
@@ -1645,6 +1650,7 @@
         {
             index: 5,
             name: "06 - Wet Porcelain Slam",
+            sample_index: 2,
             params: {
                 param_pressure: 0.82, param_tension: 0.36, param_aperture: 0.42, param_flutter: 0.35,
                 param_viscosity: 0.72, param_moisture: 0.78, param_droplet_rate: 0.65,
@@ -1657,6 +1663,7 @@
         {
             index: 6,
             name: "07 - Micro-Puff Staccato",
+            sample_index: 0,
             params: {
                 param_pressure: 0.62, param_tension: 0.62, param_aperture: 0.22, param_flutter: 0.12,
                 param_viscosity: 0.18, param_moisture: 0.15, param_droplet_rate: 0.18,
@@ -1669,6 +1676,7 @@
         {
             index: 7,
             name: "08 - Extended Gaseous Drift",
+            sample_index: 1,
             params: {
                 param_pressure: 0.58, param_tension: 0.32, param_aperture: 0.52, param_flutter: 0.42,
                 param_viscosity: 0.22, param_moisture: 0.18, param_droplet_rate: 0.12,
@@ -1681,6 +1689,7 @@
         {
             index: 8,
             name: "09 - Unison Twin Cannons",
+            sample_index: 3,
             params: {
                 param_pressure: 0.85, param_tension: 0.40, param_aperture: 0.38, param_flutter: 0.52,
                 param_viscosity: 0.35, param_moisture: 0.32, param_droplet_rate: 0.35,
@@ -1693,6 +1702,7 @@
         {
             index: 9,
             name: "10 - The Brown Note 808",
+            sample_index: 3,
             params: {
                 param_pressure: 0.95, param_tension: 0.10, param_aperture: 0.28, param_flutter: 0.18,
                 param_viscosity: 0.25, param_moisture: 0.18, param_droplet_rate: 0.15,
@@ -1746,7 +1756,7 @@
             this.scopeBytes = new Uint8Array(kTelemetryScopeSamples);
 
             // Sample Bank & Pitcher State
-            this.selectedSampleIndex = 0;
+            this.selectedSampleIndex = 3; // Default to Slot 4: Iconic Meme (4gcs5k8n-FY)
             this.sampleStartOffset = 0.0;
             this.sampleReverse = false;
             this.customAudioData = null;
@@ -2014,6 +2024,13 @@
             this.ensureAudioContext();
             const numVal = Number(value);
             this.params[paramId] = numVal;
+            if (paramId === 'sample_index' || paramId === 'param_sample_index') {
+                this.setSampleIndex(numVal);
+            } else if (paramId === 'sample_start' || paramId === 'param_sample_start') {
+                this.setSampleStart(numVal);
+            } else if (paramId === 'sample_reverse' || paramId === 'param_sample_reverse') {
+                this.setSampleReverse(!!numVal);
+            }
         }
 
         loadPreset(presetIndex) {
@@ -2021,10 +2038,13 @@
             this.currentPreset = idx;
             const preset = FACTORY_PRESETS[idx];
             this.params = { ...preset.params };
+            if (typeof preset.sample_index !== 'undefined') {
+                this.selectedSampleIndex = preset.sample_index;
+            }
             return {
                 index: idx,
                 name: preset.name,
-                params: { ...this.params }
+                params: this.getParams()
             };
         }
 
@@ -2038,7 +2058,15 @@
         }
 
         getParams() {
-            return { ...this.params };
+            return {
+                ...this.params,
+                sample_index: this.selectedSampleIndex,
+                param_sample_index: this.selectedSampleIndex,
+                sample_start: this.sampleStartOffset,
+                param_sample_start: this.sampleStartOffset,
+                sample_reverse: this.sampleReverse ? 1 : 0,
+                param_sample_reverse: this.sampleReverse ? 1 : 0
+            };
         }
     }
 
