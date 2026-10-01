@@ -278,7 +278,7 @@ bool test_T5_Challenger_TelemetryRingBuffer_SaturationStress() {
     std::thread consumer([&]() {
         VisualizerFrame frame {};
         int cycle = 0;
-        while (!producerDone.load(std::memory_order_acquire) || ring.pop(frame)) {
+        while (true) {
             while (ring.pop(frame)) {
                 framesPopped.fetch_add(1, std::memory_order_relaxed);
                 const float p = frame.colonicPressure;
@@ -286,6 +286,14 @@ bool test_T5_Challenger_TelemetryRingBuffer_SaturationStress() {
                     TEST_ASSERT(false, "Telemetry frames popped out-of-order!");
                 }
                 lastPressureSeen = p;
+            }
+            if (producerDone.load(std::memory_order_acquire)) {
+                // Drain any remaining frames
+                while (ring.pop(frame)) {
+                    framesPopped.fetch_add(1, std::memory_order_relaxed);
+                    lastPressureSeen = frame.colonicPressure;
+                }
+                break;
             }
             if (++cycle % 50 == 0) {
                 std::this_thread::yield();
