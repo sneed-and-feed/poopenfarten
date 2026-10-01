@@ -32,7 +32,9 @@ void PhysicalVoice::reset() noexcept {
     mGlideCoeff = 1.0f;
     mDeclickGain = 1.0f;
     mDeclickDelta = 0.0f;
-    mSubBassPhase = 0.0f;
+    mPressureVented = 0.0f;
+    mSquelchFilter.reset();
+    mSubThumpFilter.reset();
 
     mOsc.reset();
     mFluid.reset();
@@ -64,6 +66,10 @@ void PhysicalVoice::noteOn(int noteNumber, float velocity, float initialGlideFre
     } else {
         mCurrentFrequency = targetFreq;
     }
+
+    mPressureVented = 0.0f;
+    mSquelchFilter.reset();
+    mSubThumpFilter.reset();
 
     mEnvelope.noteOn(mVelocity);
 }
@@ -131,39 +137,78 @@ float PhysicalVoice::processSample(const ParameterSnapshot& params,
     const float aftertouchBoost = 1.0f + 0.50f * mAftertouch;
     const float effPressure = std::clamp(params.pressure * velScale * envLevel * aftertouchBoost, 0.0f, 1.0f);
 
-    // 3. Sphincter valve physical oscillator
+    const bool isRelease = (mEnvelope.getStage() == PressureEnvelope::Stage::Release);
+
+    // Dynamic pressure venting droop: emissions naturally decelerate 30-50% over envelope duration
+    const float ventRate = (effPressure * 1.5f + 0.2f) / (mSampleRate * std::max(0.12f, (params.env_decay + params.env_release) * 0.001f));
+    mPressureVented = std::min(1.0f, mPressureVented + ventRate);
+
+    const float droopFactor = 1.0f - 0.38f * std::pow(mPressureVented, 0.7f);
+    const float releaseDroop = isRelease ? (0.75f * (0.35f + 0.65f * envLevel)) : 1.0f;
+    const float effectiveFreq = std::clamp(mCurrentFrequency * droopFactor * releaseDroop, kMinOscFrequencyHz, kMaxOscFrequencyHz);
+
+    // 3. Sphincter valve physical oscillator with mucosal stiction & aperiodic cycle jitter
     SphincterOscParams oscP;
     oscP.pressure    = effPressure;
-    oscP.tension     = params.tension;
-    oscP.aperture    = params.aperture;
-    oscP.flutter     = params.flutter;
+    oscP.tension     = isRelease ? (params.tension * (0.4f + 0.6f * envLevel)) : params.tension;
+    oscP.aperture    = isRelease ? std::min(1.0f, params.aperture * 1.25f) : params.aperture;
+    oscP.flutter     = isRelease ? std::min(1.0f, params.flutter + 0.30f) : params.flutter;
     oscP.viscosity   = params.viscosity;
-    oscP.frequencyHz = mCurrentFrequency;
+    oscP.moisture    = params.moisture;
+    oscP.frequencyHz = effectiveFreq;
 
     float airVel = 0.0f;
     float aperture = 0.0f;
     const float oscWave = mOsc.processSample(oscP, airVel, aperture);
 
-    // 4. Multiphase fluid turbulence and bubbles
+    // 4. Multiphase fluid turbulence, bubbles, and droplet splatter
     FluidEngineParams fluidP;
     fluidP.viscosity   = params.viscosity;
     fluidP.moisture    = params.moisture;
     fluidP.dropletRate = params.droplet_rate;
 
+    // Trigger explosive droplet clicks and bubble chirps on flap opening transient
+    if (mOsc.wasOpeningTransient()) {
+        mFluid.triggerFlapBurst(mOsc.getOpeningTransientAmp(), params.moisture, params.droplet_rate);
+    }
+
     const float fluidWave = mFluid.processSample(airVel, aperture, fluidP);
 
-    // 5. Phase-continuous Sub-bass sine generator
-    const float phaseInc = mCurrentFrequency * (kTwoPi / mSampleRate);
-    mSubBassPhase += phaseInc;
-    if (mSubBassPhase >= kTwoPi) mSubBassPhase -= kTwoPi;
+    // 5. Dynamic Wet Squelch Formant Filter (650 Hz - 1200 Hz, Q ~ 4.5 - 6.0)
+    // Modulated dynamically by instantaneous aperture opening y(t)
+    const float apertureNorm = std::clamp(aperture / 0.003f, 0.0f, 1.0f);
+    const float fSquelch = 650.0f + 550.0f * apertureNorm;
+    const float qSquelch = 4.5f + 1.5f * std::clamp(params.moisture, 0.0f, 1.0f);
+    mSquelchFilter.setBandpass(mSampleRate, fSquelch, qSquelch);
 
+    // Route flap volume flow and turbulence through squelch formant
+    const float squelchInput = oscWave + fluidWave * 0.75f;
+    const float squelchOut = mSquelchFilter.process(squelchInput);
+
+    const float moistureAmt = std::clamp(params.moisture, 0.0f, 1.0f);
+    const float squelchMix = 0.40f + 0.60f * moistureAmt;
+    const float wetAcousticSignal = oscWave * 0.65f + fluidWave * 0.45f + squelchOut * (2.2f * squelchMix);
+
+    // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
+    // (Visceral flesh thump, completely replacing electronic sine wave)
     const float subGain = dbToGain(params.sub_level);
-    const float subBassWave = std::sin(mSubBassPhase) * subGain * envLevel;
+    const float flowThump = (aperture * 1000.0f) * (airVel / 25.0f);
+    const float dispThump = (aperture * 1000.0f) * 0.85f;
+    const float rawThump = flowThump * 0.65f + dispThump * 0.35f;
 
-    // 6. Voice summation
-    float voiceOutput = oscWave + fluidWave + subBassWave;
+    // Asymmetric soft saturation: positive flesh expansion compliance
+    const float satThump = (rawThump > 0.0f) ? (rawThump / (1.0f + 0.75f * rawThump)) : (rawThump * 0.6f);
 
-    // 7. Apply de-click crossfading
+    // Low-pass filter to extract visceral sub-bass frequencies
+    const float subCutoff = std::clamp(effectiveFreq * 1.35f, 32.0f, 95.0f);
+    mSubThumpFilter.setCutoff(mSampleRate, subCutoff);
+    const float visceralThump = mSubThumpFilter.process(satThump) * 2.8f;
+    const float subBassWave = visceralThump * subGain * envLevel;
+
+    // 7. Voice summation
+    float voiceOutput = wetAcousticSignal + subBassWave;
+
+    // 8. Apply de-click crossfading
     if (mDeclickDelta > 0.0f) {
         mDeclickGain += mDeclickDelta;
         if (mDeclickGain >= 1.0f) {

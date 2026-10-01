@@ -23,8 +23,14 @@ void FluidNoiseEngine::reset() noexcept {
     mBubbleSpawnCounter = 200;
 
     mSamplesUntilNextDroplet = static_cast<int>(mSampleRate * 0.05f);
-    mDropletFilter.reset();
-    mDropletImpulse = 0.0f;
+    for (auto& filter : mDropletFilters) {
+        filter.reset();
+    }
+    mDropletImpulses.fill(0.0f);
+    mDropletFilterIdx = 0;
+
+    mGurgleFilter.reset();
+    mGurgleFilter.setCutoff(mSampleRate, 750.0f);
 
     mViscosityFilter.reset();
     mActiveBubbleActivity = 0.0f;
@@ -67,12 +73,42 @@ void FluidNoiseEngine::triggerBubble(float radiusMm, float intensity) noexcept {
 }
 
 void FluidNoiseEngine::triggerDroplet(float intensity) noexcept {
-    // Randomize droplet bandpass resonance between 1.2 kHz and 4.8 kHz
-    const float popFreq = 1200.0f + mPrng.nextFloat01() * 3600.0f;
-    const float popQ = 6.0f + mPrng.nextFloat01() * 12.0f; // sharp resonant pop
-    mDropletFilter.setBandpass(mSampleRate, popFreq, popQ);
-    mDropletImpulse = intensity;
+    // High-Q droplet pop/click: 1.5 kHz to 4.5 kHz
+    const float popFreq = 1500.0f + mPrng.nextFloat01() * 3000.0f;
+    const float popQ = 8.0f + mPrng.nextFloat01() * 10.0f; // sharp resonant pop
+    auto& filter = mDropletFilters[mDropletFilterIdx];
+    filter.setBandpass(mSampleRate, popFreq, popQ);
+    mDropletImpulses[mDropletFilterIdx] = intensity;
     mLastDropletTrigger = intensity;
+    mDropletFilterIdx = (mDropletFilterIdx + 1) % kMaxDropletFilters;
+}
+
+void FluidNoiseEngine::triggerFlapBurst(float openingIntensity, float moisture, float dropletRate) noexcept {
+    if (moisture <= 0.0001f) return;
+
+    // Explosive cluster of high-Q droplet clicks (1.5 kHz - 4.5 kHz) directly on opening transient
+    const int numDrops = std::clamp(1 + static_cast<int>(moisture * (1.0f + dropletRate * 2.5f)), 1, static_cast<int>(kMaxDropletFilters));
+    for (int i = 0; i < numDrops; ++i) {
+        const float popFreq = 1500.0f + mPrng.nextFloat01() * 3000.0f;
+        const float popQ = 8.0f + mPrng.nextFloat01() * 10.0f;
+        const float intensity = openingIntensity * moisture * (0.35f + 0.65f * mPrng.nextFloat01()) * 0.45f;
+
+        auto& filter = mDropletFilters[mDropletFilterIdx];
+        filter.setBandpass(mSampleRate, popFreq, popQ);
+        mDropletImpulses[mDropletFilterIdx] = intensity;
+        if (intensity > mLastDropletTrigger) {
+            mLastDropletTrigger = intensity;
+        }
+        mDropletFilterIdx = (mDropletFilterIdx + 1) % kMaxDropletFilters;
+    }
+
+    // Minnaert bubble chirps directly on the opening transient
+    const int numBubbles = (mPrng.nextFloat01() < (moisture * 0.85f)) ? 2 : 1;
+    for (int i = 0; i < numBubbles; ++i) {
+        const float rMm = 0.6f + mPrng.nextFloat01() * 2.5f; // 0.6 mm to 3.1 mm
+        const float bubbleInt = moisture * (0.3f + 0.7f * mPrng.nextFloat01()) * (0.3f + 0.2f * openingIntensity);
+        triggerBubble(rMm, bubbleInt);
+    }
 }
 
 float FluidNoiseEngine::processSample(float airVelocity, float aperture, const FluidEngineParams& p) noexcept {
@@ -95,6 +131,15 @@ float FluidNoiseEngine::processSample(float airVelocity, float aperture, const F
         const float reynoldsScaling = std::pow(positiveAirVel / 20.0f, 2.5f);
         const float effectiveArea = (kSlitWidthW * positiveAperture) * 100.0f;
         turbSignal = pink * reynoldsScaling * effectiveArea * 0.12f;
+
+        // Add micro-bubble gurgle to the air stream when moist
+        const float moisture = std::clamp(p.moisture, 0.0f, 1.0f);
+        if (moisture > 0.0001f) {
+            const float microNoise = mPrng.nextFloatSigned();
+            const float smoothNoise = mGurgleFilter.process(microNoise);
+            turbSignal *= (1.0f + 0.40f * moisture * smoothNoise);
+        }
+
         turbSignal = flushDenormal(turbSignal);
     }
 
@@ -148,14 +193,14 @@ float FluidNoiseEngine::processSample(float airVelocity, float aperture, const F
     }
     mActiveBubbleActivity = std::clamp(activeEnvs * 0.2f, 0.0f, 1.0f);
 
-    // Render droplet pop filter
+    // Render all droplet pop filters
     float dropSample = 0.0f;
-    if (std::abs(mDropletImpulse) > 1.0e-5f || true) {
-        dropSample = mDropletFilter.process(mDropletImpulse);
-        mDropletImpulse = 0.0f; // Impulse input is single-sample Dirac
+    for (size_t i = 0; i < kMaxDropletFilters; ++i) {
+        dropSample += mDropletFilters[i].process(mDropletImpulses[i]);
+        mDropletImpulses[i] = 0.0f;
     }
 
-    fluidSignal = (bubbleSum * 0.35f + dropSample * 0.45f) * moisture;
+    fluidSignal = (bubbleSum * 0.35f + dropSample * 0.55f) * moisture;
 
     // 3. Sum and Viscosity Filtering
     const float rawOutput = turbSignal + fluidSignal;

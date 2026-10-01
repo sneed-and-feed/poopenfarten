@@ -16,6 +16,7 @@ struct FluidEngineParams {
 class FluidNoiseEngine {
 public:
     static constexpr size_t kMaxBubbleVoices = 16;
+    static constexpr size_t kMaxDropletFilters = 4;
 
     FluidNoiseEngine() noexcept = default;
 
@@ -28,6 +29,9 @@ public:
     // Direct trigger for droplet events (e.g., for external impulses or testing)
     void triggerDroplet(float intensity) noexcept;
     void triggerBubble(float radiusMm, float intensity) noexcept;
+
+    // Explosive cluster trigger on mucosal flap opening transient
+    void triggerFlapBurst(float openingIntensity, float moisture, float dropletRate) noexcept;
 
     [[nodiscard]] float getBubbleActivity() const noexcept { return mActiveBubbleActivity; }
     [[nodiscard]] float getDropletPopTrigger() const noexcept { return mLastDropletTrigger; }
@@ -54,10 +58,14 @@ private:
     std::array<BubbleVoice, kMaxBubbleVoices> mBubbleVoices {};
     int mBubbleSpawnCounter { 0 };
 
-    // Poisson droplet clock state
+    // Multiphase droplet click filters (4-voice overlapping pool)
     int mSamplesUntilNextDroplet { 4000 };
-    BiquadDirectForm2T mDropletFilter;
-    float mDropletImpulse { 0.0f };
+    std::array<BiquadDirectForm2T, kMaxDropletFilters> mDropletFilters {};
+    std::array<float, kMaxDropletFilters> mDropletImpulses {};
+    size_t mDropletFilterIdx { 0 };
+
+    // Air stream micro-bubble gurgle lowpass filter
+    OnePoleLowpass mGurgleFilter;
 
     // Fluid viscosity acoustic filter
     OnePoleLowpass mViscosityFilter;

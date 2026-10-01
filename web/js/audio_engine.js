@@ -182,10 +182,17 @@
             this.airVelocity = 0.0;
             this.upstreamPressure = 0.0;
             this.prevVolumeFlow = 0.0;
+            this.prng = new FastPrng(0x504F4F50);
+            this.stuck = false;
+            this.burstThreshold = 350.0;
+            this.justOpened = false;
+            this.openingTransientAmp = 0.0;
+            this.impactSlapAmp = 0.0;
         }
 
         prepare(sampleRate) {
             this.sampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
+            this.prng.setSeed(0x504F4F50);
             this.reset();
         }
 
@@ -195,9 +202,17 @@
             this.airVelocity = 0.0;
             this.upstreamPressure = 0.0;
             this.prevVolumeFlow = 0.0;
+            this.stuck = false;
+            this.burstThreshold = 350.0;
+            this.justOpened = false;
+            this.openingTransientAmp = 0.0;
+            this.impactSlapAmp = 0.0;
         }
 
         processSample(p) {
+            this.justOpened = false;
+            this.openingTransientAmp = 0.0;
+
             if (p.pressure <= 0.0001) {
                 const y0 = clamp(p.aperture * 0.002 + 0.0005, 0.0002, 0.004);
                 this.displacement = flushDenormal(this.displacement + 0.05 * (y0 - this.displacement));
@@ -205,7 +220,15 @@
                 this.airVelocity = 0.0;
                 this.upstreamPressure = 0.0;
                 this.prevVolumeFlow = 0.0;
-                return { acousticWave: 0.0, airVelocity: 0.0, aperture: this.displacement };
+                this.stuck = false;
+                this.impactSlapAmp = 0.0;
+                return {
+                    acousticWave: 0.0,
+                    airVelocity: 0.0,
+                    aperture: this.displacement,
+                    justOpened: false,
+                    openingTransientAmp: 0.0
+                };
             }
 
             const dt = 1.0 / this.sampleRate;
@@ -213,7 +236,7 @@
             // 1. Clamped fundamental frequency and tension offset
             const tensionMultiplier = 0.85 + 0.30 * clamp(p.tension, 0.0, 1.0);
             const fTarget = clamp(p.frequencyHz * tensionMultiplier, kMinOscFrequencyHz, kMaxOscFrequencyHz);
-            const kRelaxationCorrection = 1.4114;
+            const kRelaxationCorrection = 1.28;
             const f0 = clamp(fTarget * kRelaxationCorrection, kMinOscFrequencyHz, kMaxOscFrequencyHz * 1.6);
 
             // 2. Viscous mass and damping loading
@@ -228,68 +251,97 @@
 
             // 4. Upstream colonic pressure head (Pa)
             const pDrive = p.pressure * 1500.0;
-            const fillRate = 2.5 * omega0;
-            const currentArea = kSlitWidthW * Math.max(0.0, this.displacement);
+            const fillRate = 3.5 * omega0;
+            const currentArea = this.stuck ? 0.0 : (kSlitWidthW * Math.max(0.0, this.displacement));
             const flowVolume = currentArea * this.airVelocity;
 
             const dPup = fillRate * (pDrive - this.upstreamPressure) - (flowVolume * omega0 * 8.0);
             this.upstreamPressure = clamp(this.upstreamPressure + dt * dPup, 0.0, 3000.0);
             this.upstreamPressure = flushDenormal(this.upstreamPressure);
 
-            // 5. Airflow velocity through aperture via Bernoulli equation
-            if (this.displacement > 1.0e-6 && this.upstreamPressure > 0.0) {
+            // 5. Mucosal Stiction & Seal Burst Logic
+            if (this.stuck) {
+                if (this.upstreamPressure >= this.burstThreshold || this.upstreamPressure >= (0.96 * pDrive)) {
+                    this.stuck = false;
+                    this.justOpened = true;
+                    const burstVel = Math.sqrt(Math.max(0.0, 2.0 * this.upstreamPressure / mEff)) * 0.035 + 1.8;
+                    this.velocity = burstVel;
+                    this.openingTransientAmp = burstVel;
+                    this.displacement = 0.00015;
+                } else {
+                    this.displacement = 0.0;
+                    this.velocity = 0.0;
+                    this.airVelocity = 0.0;
+                }
+            }
+
+            // 6. Airflow velocity through aperture via Bernoulli equation
+            if (!this.stuck && this.displacement > 1.0e-6 && this.upstreamPressure > 0.0) {
                 this.airVelocity = Math.sqrt(2.0 * this.upstreamPressure / kAirDensityRho);
             } else {
                 this.airVelocity = 0.0;
             }
             this.airVelocity = flushDenormal(this.airVelocity);
 
-            // 6. Flutter / Asymmetric tissue chaos
-            const flutterAmt = clamp(p.flutter, 0.0, 1.0);
-            const dispOffset = this.displacement - y0;
-            const kFlutter = k0 * (1.0 + 0.4 * flutterAmt * (dispOffset * dispOffset * 1.0e6));
-            const rFlutter = r0 * (1.0 - 0.25 * flutterAmt * (this.velocity > 0.0 ? 1.0 : -1.0));
+            // 7. Flutter / Asymmetric tissue chaos
+            if (!this.stuck) {
+                const flutterAmt = clamp(p.flutter, 0.0, 1.0);
+                const dispOffset = this.displacement - y0;
+                const kFlutter = k0 * (1.0 + 0.4 * flutterAmt * (dispOffset * dispOffset * 1.0e6));
+                const rFlutter = r0 * (1.0 - 0.25 * flutterAmt * (this.velocity > 0.0 ? 1.0 : -1.0));
 
-            // 7. Force balance
-            const springForce = -kFlutter * dispOffset;
-            const dampingForce = -rFlutter * this.velocity;
-            const tissueArea = 0.00025;
-            const freqRatio = f0 / 110.0;
-            const forceScaling = clamp(freqRatio * freqRatio, 0.02, 15.0);
+                const springForce = -kFlutter * dispOffset;
+                const dampingForce = -rFlutter * this.velocity;
+                const tissueArea = 0.00025;
+                const freqRatio = f0 / 110.0;
+                const forceScaling = clamp(freqRatio * freqRatio, 0.02, 15.0);
 
-            const gapRatio = y0 / Math.max(0.0001, this.displacement);
-            const dynamicPressure = 0.5 * kAirDensityRho * this.airVelocity * this.airVelocity * gapRatio;
-            const drivingForce = tissueArea * (this.upstreamPressure - dynamicPressure) * forceScaling;
+                const gapRatio = y0 / Math.max(0.0001, this.displacement);
+                const dynamicPressure = 0.5 * kAirDensityRho * this.airVelocity * this.airVelocity * gapRatio;
+                const drivingForce = tissueArea * (this.upstreamPressure - dynamicPressure) * forceScaling;
 
-            const totalForce = springForce + dampingForce + drivingForce;
-            const acceleration = totalForce / mEff;
+                const totalForce = springForce + dampingForce + drivingForce;
+                const acceleration = totalForce / mEff;
 
-            // 8. Semi-implicit Euler integration
-            this.velocity += dt * acceleration;
-            this.velocity = clamp(this.velocity, -20.0, 20.0);
-            this.velocity = flushDenormal(this.velocity);
+                this.velocity += dt * acceleration;
+                this.velocity = clamp(this.velocity, -25.0, 25.0);
+                this.velocity = flushDenormal(this.velocity);
 
-            this.displacement += dt * this.velocity;
+                this.displacement += dt * this.velocity;
 
-            // 9. Boundary contact stiffness and restitution at y = 0
-            if (this.displacement <= 0.0) {
-                this.displacement = 0.0;
-                const eRestitution = 0.65;
-                this.velocity = -eRestitution * this.velocity;
-                this.airVelocity = 0.0;
+                // 8. Boundary contact stiffness and mucosal stiction capture at y = 0
+                if (this.displacement <= 0.0) {
+                    this.displacement = 0.0;
+                    this.airVelocity = 0.0;
+                    this.stuck = true;
+
+                    this.impactSlapAmp = clamp(-this.velocity * 0.35, 0.0, 6.0);
+                    this.velocity = 0.0;
+
+                    const pThreshold = pDrive * (0.35 + 0.22 * clamp(p.tension, 0.0, 1.0));
+                    const jitter = this.prng.nextFloatSigned() * 0.35;
+                    this.burstThreshold = Math.max(40.0, pThreshold * (1.0 + jitter));
+                }
             }
             this.displacement = flushDenormal(this.displacement);
 
-            // 10. Radiated acoustic signal
+            // 9. Radiated acoustic signal
             const currentVolumeFlow = kSlitWidthW * this.displacement * this.airVelocity;
             const dVolumeFlowDt = (currentVolumeFlow - this.prevVolumeFlow) * dt * 1000.0;
             this.prevVolumeFlow = currentVolumeFlow;
 
-            const acousticWave = (this.displacement - y0) * 800.0 + dVolumeFlowDt * 0.1;
+            const openPulse = this.justOpened ? (this.openingTransientAmp * 0.12) : 0.0;
+            const slapPulse = (this.impactSlapAmp > 0.0) ? (this.impactSlapAmp * -0.08) : 0.0;
+            this.impactSlapAmp *= 0.85;
+            if (this.impactSlapAmp < 1.0e-3) this.impactSlapAmp = 0.0;
+
+            const acousticWave = (this.displacement - y0) * 800.0 + dVolumeFlowDt * 0.10 + openPulse + slapPulse;
             return {
                 acousticWave: flushDenormal(acousticWave),
                 airVelocity: this.airVelocity,
-                aperture: this.displacement
+                aperture: this.displacement,
+                justOpened: this.justOpened,
+                openingTransientAmp: this.openingTransientAmp
             };
         }
     }
@@ -320,10 +372,12 @@
             this.bubbleSpawnCounter = 200;
 
             this.samplesUntilNextDroplet = 2000;
-            this.dropletFilter = new BiquadDirectForm2T();
-            this.dropletImpulse = 0.0;
+            this.dropletFilters = [new BiquadDirectForm2T(), new BiquadDirectForm2T(), new BiquadDirectForm2T(), new BiquadDirectForm2T()];
+            this.dropletImpulses = [0.0, 0.0, 0.0, 0.0];
+            this.dropletFilterIdx = 0;
             this.lastDropletTrigger = 0.0;
 
+            this.gurgleFilter = new OnePoleLowpass();
             this.viscosityFilter = new OnePoleLowpass();
             this.activeBubbleActivity = 0.0;
         }
@@ -346,9 +400,14 @@
             }
             this.bubbleSpawnCounter = 200;
             this.samplesUntilNextDroplet = Math.floor(this.sampleRate * 0.05);
-            this.dropletFilter.reset();
-            this.dropletImpulse = 0.0;
+            for (const f of this.dropletFilters) {
+                f.reset();
+            }
+            this.dropletImpulses = [0.0, 0.0, 0.0, 0.0];
+            this.dropletFilterIdx = 0;
             this.lastDropletTrigger = 0.0;
+            this.gurgleFilter.reset();
+            this.gurgleFilter.setCutoff(this.sampleRate, 750.0);
             this.viscosityFilter.reset();
             this.activeBubbleActivity = 0.0;
         }
@@ -384,11 +443,39 @@
         }
 
         triggerDroplet(intensity) {
-            const popFreq = 1200.0 + this.prng.nextFloat01() * 3600.0;
-            const popQ = 6.0 + this.prng.nextFloat01() * 12.0;
-            this.dropletFilter.setBandpass(this.sampleRate, popFreq, popQ);
-            this.dropletImpulse = intensity;
+            const popFreq = 1500.0 + this.prng.nextFloat01() * 3000.0;
+            const popQ = 8.0 + this.prng.nextFloat01() * 10.0;
+            const filter = this.dropletFilters[this.dropletFilterIdx];
+            filter.setBandpass(this.sampleRate, popFreq, popQ);
+            this.dropletImpulses[this.dropletFilterIdx] = intensity;
             this.lastDropletTrigger = intensity;
+            this.dropletFilterIdx = (this.dropletFilterIdx + 1) % this.dropletFilters.length;
+        }
+
+        triggerFlapBurst(openingIntensity, moisture, dropletRate) {
+            if (moisture <= 0.0001) return;
+
+            const numDrops = clamp(1 + Math.floor(moisture * (1.0 + dropletRate * 2.5)), 1, this.dropletFilters.length);
+            for (let i = 0; i < numDrops; ++i) {
+                const popFreq = 1500.0 + this.prng.nextFloat01() * 3000.0;
+                const popQ = 8.0 + this.prng.nextFloat01() * 10.0;
+                const intensity = openingIntensity * moisture * (0.35 + 0.65 * this.prng.nextFloat01()) * 0.45;
+
+                const filter = this.dropletFilters[this.dropletFilterIdx];
+                filter.setBandpass(this.sampleRate, popFreq, popQ);
+                this.dropletImpulses[this.dropletFilterIdx] = intensity;
+                if (intensity > this.lastDropletTrigger) {
+                    this.lastDropletTrigger = intensity;
+                }
+                this.dropletFilterIdx = (this.dropletFilterIdx + 1) % this.dropletFilters.length;
+            }
+
+            const numBubbles = (this.prng.nextFloat01() < (moisture * 0.85)) ? 2 : 1;
+            for (let i = 0; i < numBubbles; ++i) {
+                const rMm = 0.6 + this.prng.nextFloat01() * 2.5;
+                const bubbleInt = moisture * (0.3 + 0.7 * this.prng.nextFloat01()) * (0.3 + 0.2 * openingIntensity);
+                this.triggerBubble(rMm, bubbleInt);
+            }
         }
 
         processSample(airVelocity, aperture, p) {
@@ -409,6 +496,14 @@
                 const reynoldsScaling = Math.pow(posAirVel / 20.0, 2.5);
                 const effectiveArea = (kSlitWidthW * posAperture) * 100.0;
                 turbSignal = pink * reynoldsScaling * effectiveArea * 0.12;
+
+                const moisture = clamp(p.moisture, 0.0, 1.0);
+                if (moisture > 0.0001) {
+                    const microNoise = this.prng.nextFloatSigned();
+                    const smoothNoise = this.gurgleFilter.process(microNoise);
+                    turbSignal *= (1.0 + 0.40 * moisture * smoothNoise);
+                }
+
                 turbSignal = flushDenormal(turbSignal);
             }
 
@@ -455,11 +550,14 @@
             }
             this.activeBubbleActivity = clamp(activeEnvs * 0.2, 0.0, 1.0);
 
-            // Render droplet pop filter
-            const dropSample = this.dropletFilter.process(this.dropletImpulse);
-            this.dropletImpulse = 0.0;
+            // Render all droplet pop filters
+            let dropSample = 0.0;
+            for (let i = 0; i < this.dropletFilters.length; ++i) {
+                dropSample += this.dropletFilters[i].process(this.dropletImpulses[i]);
+                this.dropletImpulses[i] = 0.0;
+            }
 
-            fluidSignal = (bubbleSum * 0.35 + dropSample * 0.45) * moisture;
+            fluidSignal = (bubbleSum * 0.35 + dropSample * 0.55) * moisture;
 
             // 3. Sum and Viscosity Filtering
             const rawOutput = turbSignal + fluidSignal;
@@ -580,7 +678,9 @@
             this.declickGain = 1.0;
             this.declickDelta = 0.0;
 
-            this.subBassPhase = 0.0;
+            this.pressureVented = 0.0;
+            this.squelchFilter = new BiquadDirectForm2T();
+            this.subThumpFilter = new OnePoleLowpass();
 
             this.osc = new SphincterOscillator();
             this.fluid = new FluidNoiseEngine();
@@ -607,7 +707,9 @@
             this.glideCoeff = 1.0;
             this.declickGain = 1.0;
             this.declickDelta = 0.0;
-            this.subBassPhase = 0.0;
+            this.pressureVented = 0.0;
+            this.squelchFilter.reset();
+            this.subThumpFilter.reset();
 
             this.osc.reset();
             this.fluid.reset();
@@ -638,6 +740,10 @@
             } else {
                 this.currentFrequency = targetFreq;
             }
+
+            this.pressureVented = 0.0;
+            this.squelchFilter.reset();
+            this.subThumpFilter.reset();
 
             this.envelope.noteOn(this.velocity);
         }
@@ -701,14 +807,25 @@
             const aftertouchBoost = 1.0 + 0.50 * this.aftertouch;
             const effPressure = clamp(params.pressure * velScale * envLevel * aftertouchBoost, 0.0, 1.0);
 
-            // 3. Sphincter oscillator
+            const isRelease = (this.envelope.stage === 'Release');
+
+            // Dynamic pressure venting droop: emissions naturally decelerate 30-50% over envelope
+            const ventRate = (effPressure * 1.5 + 0.2) / (this.sampleRate * Math.max(0.12, (params.env_decay + params.env_release) * 0.001));
+            this.pressureVented = Math.min(1.0, this.pressureVented + ventRate);
+
+            const droopFactor = 1.0 - 0.38 * Math.pow(this.pressureVented, 0.7);
+            const releaseDroop = isRelease ? (0.75 * (0.35 + 0.65 * envLevel)) : 1.0;
+            const effectiveFreq = clamp(this.currentFrequency * droopFactor * releaseDroop, kMinOscFrequencyHz, kMaxOscFrequencyHz);
+
+            // 3. Sphincter oscillator with mucosal stiction & aperiodic cycle jitter
             const oscP = {
                 pressure: effPressure,
-                tension: params.tension,
-                aperture: params.aperture,
-                flutter: params.flutter,
+                tension: isRelease ? (params.tension * (0.4 + 0.6 * envLevel)) : params.tension,
+                aperture: isRelease ? Math.min(1.0, params.aperture * 1.25) : params.aperture,
+                flutter: isRelease ? Math.min(1.0, params.flutter + 0.30) : params.flutter,
                 viscosity: params.viscosity,
-                frequencyHz: this.currentFrequency
+                moisture: params.moisture,
+                frequencyHz: effectiveFreq
             };
             const oscRes = this.osc.processSample(oscP);
 
@@ -718,20 +835,45 @@
                 moisture: params.moisture,
                 droplet_rate: params.droplet_rate
             };
+
+            // Trigger explosive droplet clicks and bubble chirps on flap opening transient
+            if (oscRes.justOpened) {
+                this.fluid.triggerFlapBurst(oscRes.openingTransientAmp, params.moisture, params.droplet_rate);
+            }
+
             const fluidWave = this.fluid.processSample(oscRes.airVelocity, oscRes.aperture, fluidP);
 
-            // 5. Phase-continuous Sub-bass sine generator
-            const phaseInc = this.currentFrequency * (kTwoPi / this.sampleRate);
-            this.subBassPhase += phaseInc;
-            if (this.subBassPhase >= kTwoPi) this.subBassPhase -= kTwoPi;
+            // 5. Dynamic Wet Squelch Formant Filter (650 Hz - 1200 Hz, Q ~ 4.5 - 6.0)
+            const apertureNorm = clamp(oscRes.aperture / 0.003, 0.0, 1.0);
+            const fSquelch = 650.0 + 550.0 * apertureNorm;
+            const qSquelch = 4.5 + 1.5 * clamp(params.moisture, 0.0, 1.0);
+            this.squelchFilter.setBandpass(this.sampleRate, fSquelch, qSquelch);
 
+            // Route flap volume flow and turbulence through squelch formant
+            const squelchInput = oscRes.acousticWave + fluidWave * 0.75;
+            const squelchOut = this.squelchFilter.process(squelchInput);
+
+            const moistureAmt = clamp(params.moisture, 0.0, 1.0);
+            const squelchMix = 0.40 + 0.60 * moistureAmt;
+            const wetAcousticSignal = oscRes.acousticWave * 0.65 + fluidWave * 0.45 + squelchOut * (2.2 * squelchMix);
+
+            // 6. Asymmetric, soft-saturated aerodynamic volume velocity displacement pulse
             const subGain = dbToGain(params.sub_level);
-            const subBassWave = Math.sin(this.subBassPhase) * subGain * envLevel;
+            const flowThump = (oscRes.aperture * 1000.0) * (oscRes.airVelocity / 25.0);
+            const dispThump = (oscRes.aperture * 1000.0) * 0.85;
+            const rawThump = flowThump * 0.65 + dispThump * 0.35;
 
-            // 6. Voice summation
-            let voiceOutput = oscRes.acousticWave + fluidWave + subBassWave;
+            const satThump = (rawThump > 0.0) ? (rawThump / (1.0 + 0.75 * rawThump)) : (rawThump * 0.6);
 
-            // 7. De-click crossfading
+            const subCutoff = clamp(effectiveFreq * 1.35, 32.0, 95.0);
+            this.subThumpFilter.setCutoff(this.sampleRate, subCutoff);
+            const visceralThump = this.subThumpFilter.process(satThump) * 2.8;
+            const subBassWave = visceralThump * subGain * envLevel;
+
+            // 7. Voice summation
+            let voiceOutput = wetAcousticSignal + subBassWave;
+
+            // 8. De-click crossfading
             if (this.declickDelta > 0.0) {
                 this.declickGain += this.declickDelta;
                 if (this.declickGain >= 1.0) {
@@ -1317,120 +1459,120 @@
             index: 0,
             name: "01 - Clean Continental Purr",
             params: {
-                param_pressure: 0.65, param_tension: 0.45, param_aperture: 0.35, param_flutter: 0.10,
-                param_viscosity: 0.10, param_moisture: 0.05, param_droplet_rate: 0.05,
-                param_cleft_damping: 0.60, param_porcelain_mix: 0.20, param_porcelain_size: 1.00, param_porcelain_model: 1,
-                param_voice_mode: 0, param_glide_time: 40.0, param_sub_level: -9.0, param_drive: 0.10, param_master_gain: 0.00,
-                macro_squeeze: 0.40, macro_moisture: 0.15,
-                param_env_attack: 10.0, param_env_decay: 400.0, param_env_sustain: 0.50, param_env_release: 100.0
+                param_pressure: 0.65, param_tension: 0.42, param_aperture: 0.38, param_flutter: 0.35,
+                param_viscosity: 0.50, param_moisture: 0.72, param_droplet_rate: 0.68,
+                param_cleft_damping: 0.45, param_porcelain_mix: 0.28, param_porcelain_size: 1.05, param_porcelain_model: 1,
+                param_voice_mode: 0, param_glide_time: 35.0, param_sub_level: -3.0, param_drive: 0.22, param_master_gain: 0.00,
+                macro_squeeze: 0.45, macro_moisture: 0.70,
+                param_env_attack: 8.0, param_env_decay: 650.0, param_env_sustain: 0.40, param_env_release: 180.0
             }
         },
         {
             index: 1,
             name: "02 - High-Tension Squeaker",
             params: {
-                param_pressure: 0.85, param_tension: 0.92, param_aperture: 0.08, param_flutter: 0.05,
-                param_viscosity: 0.05, param_moisture: 0.00, param_droplet_rate: 0.00,
-                param_cleft_damping: 0.30, param_porcelain_mix: 0.15, param_porcelain_size: 0.70, param_porcelain_model: 0,
-                param_voice_mode: 0, param_glide_time: 25.0, param_sub_level: -24.0, param_drive: 0.30, param_master_gain: -1.00,
-                macro_squeeze: 0.85, macro_moisture: 0.00,
-                param_env_attack: 2.0, param_env_decay: 200.0, param_env_sustain: 0.70, param_env_release: 50.0
+                param_pressure: 0.85, param_tension: 0.92, param_aperture: 0.08, param_flutter: 0.18,
+                param_viscosity: 0.12, param_moisture: 0.15, param_droplet_rate: 0.10,
+                param_cleft_damping: 0.35, param_porcelain_mix: 0.18, param_porcelain_size: 0.75, param_porcelain_model: 0,
+                param_voice_mode: 0, param_glide_time: 25.0, param_sub_level: -20.0, param_drive: 0.28, param_master_gain: -1.00,
+                macro_squeeze: 0.85, macro_moisture: 0.15,
+                param_env_attack: 2.0, param_env_decay: 220.0, param_env_sustain: 0.65, param_env_release: 55.0
             }
         },
         {
             index: 2,
             name: "03 - Viscous Multiphase Splatter",
             params: {
-                param_pressure: 0.78, param_tension: 0.40, param_aperture: 0.45, param_flutter: 0.35,
-                param_viscosity: 0.85, param_moisture: 0.80, param_droplet_rate: 0.75,
-                param_cleft_damping: 0.45, param_porcelain_mix: 0.40, param_porcelain_size: 1.10, param_porcelain_model: 2,
-                param_voice_mode: 0, param_glide_time: 60.0, param_sub_level: -6.0, param_drive: 0.25, param_master_gain: 0.00,
+                param_pressure: 0.78, param_tension: 0.40, param_aperture: 0.45, param_flutter: 0.40,
+                param_viscosity: 0.85, param_moisture: 0.80, param_droplet_rate: 0.82,
+                param_cleft_damping: 0.42, param_porcelain_mix: 0.42, param_porcelain_size: 1.15, param_porcelain_model: 2,
+                param_voice_mode: 0, param_glide_time: 50.0, param_sub_level: -4.0, param_drive: 0.28, param_master_gain: 0.00,
                 macro_squeeze: 0.60, macro_moisture: 0.85,
-                param_env_attack: 5.0, param_env_decay: 500.0, param_env_sustain: 0.40, param_env_release: 150.0
+                param_env_attack: 5.0, param_env_decay: 550.0, param_env_sustain: 0.42, param_env_release: 160.0
             }
         },
         {
             index: 3,
             name: "04 - Visceral Sub-Rumble (18 Hz)",
             params: {
-                param_pressure: 0.90, param_tension: 0.12, param_aperture: 0.60, param_flutter: 0.25,
-                param_viscosity: 0.30, param_moisture: 0.20, param_droplet_rate: 0.15,
-                param_cleft_damping: 0.80, param_porcelain_mix: 0.50, param_porcelain_size: 1.60, param_porcelain_model: 1,
-                param_voice_mode: 0, param_glide_time: 80.0, param_sub_level: 3.0, param_drive: 0.45, param_master_gain: 1.00,
-                macro_squeeze: 0.70, macro_moisture: 0.30,
-                param_env_attack: 20.0, param_env_decay: 800.0, param_env_sustain: 0.80, param_env_release: 300.0
+                param_pressure: 0.90, param_tension: 0.12, param_aperture: 0.58, param_flutter: 0.30,
+                param_viscosity: 0.35, param_moisture: 0.28, param_droplet_rate: 0.22,
+                param_cleft_damping: 0.75, param_porcelain_mix: 0.48, param_porcelain_size: 1.55, param_porcelain_model: 1,
+                param_voice_mode: 0, param_glide_time: 75.0, param_sub_level: 3.0, param_drive: 0.42, param_master_gain: 0.50,
+                macro_squeeze: 0.70, macro_moisture: 0.35,
+                param_env_attack: 18.0, param_env_decay: 850.0, param_env_sustain: 0.75, param_env_release: 280.0
             }
         },
         {
             index: 4,
             name: "05 - Flutter-Tongue Stutter",
             params: {
-                param_pressure: 0.75, param_tension: 0.50, param_aperture: 0.30, param_flutter: 0.95,
-                param_viscosity: 0.20, param_moisture: 0.15, param_droplet_rate: 0.20,
-                param_cleft_damping: 0.40, param_porcelain_mix: 0.25, param_porcelain_size: 1.00, param_porcelain_model: 0,
-                param_voice_mode: 0, param_glide_time: 30.0, param_sub_level: -12.0, param_drive: 0.20, param_master_gain: 0.00,
-                macro_squeeze: 0.80, macro_moisture: 0.20,
-                param_env_attack: 5.0, param_env_decay: 450.0, param_env_sustain: 0.60, param_env_release: 80.0
+                param_pressure: 0.75, param_tension: 0.48, param_aperture: 0.32, param_flutter: 0.95,
+                param_viscosity: 0.28, param_moisture: 0.32, param_droplet_rate: 0.28,
+                param_cleft_damping: 0.42, param_porcelain_mix: 0.28, param_porcelain_size: 1.05, param_porcelain_model: 0,
+                param_voice_mode: 0, param_glide_time: 30.0, param_sub_level: -9.0, param_drive: 0.24, param_master_gain: 0.00,
+                macro_squeeze: 0.80, macro_moisture: 0.35,
+                param_env_attack: 5.0, param_env_decay: 480.0, param_env_sustain: 0.55, param_env_release: 90.0
             }
         },
         {
             index: 5,
             name: "06 - Wet Porcelain Slam",
             params: {
-                param_pressure: 0.82, param_tension: 0.38, param_aperture: 0.40, param_flutter: 0.30,
-                param_viscosity: 0.70, param_moisture: 0.75, param_droplet_rate: 0.60,
-                param_cleft_damping: 0.30, param_porcelain_mix: 0.75, param_porcelain_size: 1.30, param_porcelain_model: 1,
-                param_voice_mode: 0, param_glide_time: 45.0, param_sub_level: -3.0, param_drive: 0.35, param_master_gain: 0.00,
-                macro_squeeze: 0.65, macro_moisture: 0.75,
-                param_env_attack: 8.0, param_env_decay: 600.0, param_env_sustain: 0.50, param_env_release: 200.0
+                param_pressure: 0.82, param_tension: 0.36, param_aperture: 0.42, param_flutter: 0.35,
+                param_viscosity: 0.72, param_moisture: 0.78, param_droplet_rate: 0.65,
+                param_cleft_damping: 0.32, param_porcelain_mix: 0.72, param_porcelain_size: 1.35, param_porcelain_model: 1,
+                param_voice_mode: 0, param_glide_time: 45.0, param_sub_level: -2.0, param_drive: 0.32, param_master_gain: 0.00,
+                macro_squeeze: 0.65, macro_moisture: 0.80,
+                param_env_attack: 8.0, param_env_decay: 620.0, param_env_sustain: 0.48, param_env_release: 210.0
             }
         },
         {
             index: 6,
             name: "07 - Micro-Puff Staccato",
             params: {
-                param_pressure: 0.60, param_tension: 0.65, param_aperture: 0.20, param_flutter: 0.05,
-                param_viscosity: 0.10, param_moisture: 0.05, param_droplet_rate: 0.10,
-                param_cleft_damping: 0.70, param_porcelain_mix: 0.10, param_porcelain_size: 0.80, param_porcelain_model: 0,
-                param_voice_mode: 0, param_glide_time: 0.0, param_sub_level: -18.0, param_drive: 0.05, param_master_gain: 2.00,
-                macro_squeeze: 0.30, macro_moisture: 0.10,
-                param_env_attack: 0.5, param_env_decay: 60.0, param_env_sustain: 0.00, param_env_release: 15.0
+                param_pressure: 0.62, param_tension: 0.62, param_aperture: 0.22, param_flutter: 0.12,
+                param_viscosity: 0.18, param_moisture: 0.15, param_droplet_rate: 0.18,
+                param_cleft_damping: 0.65, param_porcelain_mix: 0.12, param_porcelain_size: 0.85, param_porcelain_model: 0,
+                param_voice_mode: 0, param_glide_time: 0.0, param_sub_level: -15.0, param_drive: 0.10, param_master_gain: 1.50,
+                macro_squeeze: 0.35, macro_moisture: 0.18,
+                param_env_attack: 0.5, param_env_decay: 70.0, param_env_sustain: 0.00, param_env_release: 20.0
             }
         },
         {
             index: 7,
             name: "08 - Extended Gaseous Drift",
             params: {
-                param_pressure: 0.55, param_tension: 0.35, param_aperture: 0.50, param_flutter: 0.40,
-                param_viscosity: 0.15, param_moisture: 0.10, param_droplet_rate: 0.05,
-                param_cleft_damping: 0.50, param_porcelain_mix: 0.30, param_porcelain_size: 1.00, param_porcelain_model: 3,
-                param_voice_mode: 0, param_glide_time: 120.0, param_sub_level: -8.0, param_drive: 0.15, param_master_gain: 0.00,
-                macro_squeeze: 0.35, macro_moisture: 0.15,
-                param_env_attack: 40.0, param_env_decay: 1800.0, param_env_sustain: 0.75, param_env_release: 400.0
+                param_pressure: 0.58, param_tension: 0.32, param_aperture: 0.52, param_flutter: 0.42,
+                param_viscosity: 0.22, param_moisture: 0.18, param_droplet_rate: 0.12,
+                param_cleft_damping: 0.48, param_porcelain_mix: 0.32, param_porcelain_size: 1.05, param_porcelain_model: 3,
+                param_voice_mode: 0, param_glide_time: 110.0, param_sub_level: -6.0, param_drive: 0.18, param_master_gain: 0.00,
+                macro_squeeze: 0.40, macro_moisture: 0.22,
+                param_env_attack: 35.0, param_env_decay: 1750.0, param_env_sustain: 0.70, param_env_release: 380.0
             }
         },
         {
             index: 8,
             name: "09 - Unison Twin Cannons",
             params: {
-                param_pressure: 0.85, param_tension: 0.42, param_aperture: 0.35, param_flutter: 0.50,
-                param_viscosity: 0.30, param_moisture: 0.25, param_droplet_rate: 0.30,
-                param_cleft_damping: 0.40, param_porcelain_mix: 0.45, param_porcelain_size: 1.15, param_porcelain_model: 1,
-                param_voice_mode: 2, param_glide_time: 50.0, param_sub_level: 0.0, param_drive: 0.40, param_master_gain: -2.00,
-                macro_squeeze: 0.75, macro_moisture: 0.30,
-                param_env_attack: 10.0, param_env_decay: 500.0, param_env_sustain: 0.70, param_env_release: 150.0
+                param_pressure: 0.85, param_tension: 0.40, param_aperture: 0.38, param_flutter: 0.52,
+                param_viscosity: 0.35, param_moisture: 0.32, param_droplet_rate: 0.35,
+                param_cleft_damping: 0.38, param_porcelain_mix: 0.48, param_porcelain_size: 1.20, param_porcelain_model: 1,
+                param_voice_mode: 2, param_glide_time: 45.0, param_sub_level: 0.0, param_drive: 0.38, param_master_gain: -2.00,
+                macro_squeeze: 0.75, macro_moisture: 0.35,
+                param_env_attack: 10.0, param_env_decay: 520.0, param_env_sustain: 0.68, param_env_release: 160.0
             }
         },
         {
             index: 9,
             name: "10 - The Brown Note 808",
             params: {
-                param_pressure: 0.95, param_tension: 0.10, param_aperture: 0.25, param_flutter: 0.15,
-                param_viscosity: 0.20, param_moisture: 0.10, param_droplet_rate: 0.10,
-                param_cleft_damping: 0.90, param_porcelain_mix: 0.20, param_porcelain_size: 1.50, param_porcelain_model: 1,
-                param_voice_mode: 0, param_glide_time: 15.0, param_sub_level: 6.0, param_drive: 0.55, param_master_gain: 1.00,
-                macro_squeeze: 0.90, macro_moisture: 0.15,
-                param_env_attack: 1.0, param_env_decay: 1200.0, param_env_sustain: 0.30, param_env_release: 250.0
+                param_pressure: 0.95, param_tension: 0.10, param_aperture: 0.28, param_flutter: 0.18,
+                param_viscosity: 0.25, param_moisture: 0.18, param_droplet_rate: 0.15,
+                param_cleft_damping: 0.88, param_porcelain_mix: 0.25, param_porcelain_size: 1.55, param_porcelain_model: 1,
+                param_voice_mode: 0, param_glide_time: 15.0, param_sub_level: 6.0, param_drive: 0.52, param_master_gain: 1.00,
+                macro_squeeze: 0.90, macro_moisture: 0.20,
+                param_env_attack: 1.0, param_env_decay: 1150.0, param_env_sustain: 0.35, param_env_release: 260.0
             }
         }
     ];

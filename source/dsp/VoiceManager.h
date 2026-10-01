@@ -158,8 +158,14 @@ private:
     float mDeclickGain       { 1.0f };
     float mDeclickDelta      { 0.0f };
 
-    // Sub-bass phase tracker
-    float mSubBassPhase      { 0.0f };
+    // Dynamic pressure droop tracking
+    float mPressureVented    { 0.0f };
+
+    // Dynamic 2-pole resonant wet squelch formant filter (650 - 1200 Hz, Q ~ 4.5 - 6.0)
+    BiquadDirectForm2T mSquelchFilter;
+
+    // Asymmetric aerodynamic sub-bass displacement pulse lowpass filter
+    OnePoleLowpass mSubThumpFilter;
 
     SphincterOscillator mOsc;
     FluidNoiseEngine    mFluid;

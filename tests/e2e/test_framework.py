@@ -583,120 +583,120 @@ class PresetRegistry:
             "index": 0,
             "name": "01 - Clean Continental Purr",
             "params": {
-                "param_pressure": 0.65, "param_tension": 0.45, "param_aperture": 0.35, "param_flutter": 0.10,
-                "param_viscosity": 0.10, "param_moisture": 0.05, "param_droplet_rate": 0.05, "param_cleft_damping": 0.60,
-                "param_porcelain_mix": 0.20, "param_porcelain_size": 1.00, "param_porcelain_model": 1, "param_voice_mode": 0,
-                "param_glide_time": 40.0, "param_sub_level": -9.0, "param_drive": 0.10, "param_master_gain": 0.0,
-                "macro_squeeze": 0.40, "macro_moisture": 0.15,
-                "param_env_attack": 10.0, "param_env_decay": 400.0, "param_env_sustain": 0.50, "param_env_release": 100.0
+                "param_pressure": 0.65, "param_tension": 0.42, "param_aperture": 0.38, "param_flutter": 0.35,
+                "param_viscosity": 0.50, "param_moisture": 0.72, "param_droplet_rate": 0.68, "param_cleft_damping": 0.45,
+                "param_porcelain_mix": 0.28, "param_porcelain_size": 1.05, "param_porcelain_model": 1, "param_voice_mode": 0,
+                "param_glide_time": 35.0, "param_sub_level": -3.0, "param_drive": 0.22, "param_master_gain": 0.0,
+                "macro_squeeze": 0.45, "macro_moisture": 0.70,
+                "param_env_attack": 8.0, "param_env_decay": 650.0, "param_env_sustain": 0.40, "param_env_release": 180.0
             }
         },
         {
             "index": 1,
             "name": "02 - High-Tension Squeaker",
             "params": {
-                "param_pressure": 0.85, "param_tension": 0.92, "param_aperture": 0.08, "param_flutter": 0.05,
-                "param_viscosity": 0.05, "param_moisture": 0.00, "param_droplet_rate": 0.00, "param_cleft_damping": 0.30,
-                "param_porcelain_mix": 0.15, "param_porcelain_size": 0.70, "param_porcelain_model": 0, "param_voice_mode": 0,
-                "param_glide_time": 25.0, "param_sub_level": -24.0, "param_drive": 0.30, "param_master_gain": -1.0,
-                "macro_squeeze": 0.85, "macro_moisture": 0.00,
-                "param_env_attack": 2.0, "param_env_decay": 200.0, "param_env_sustain": 0.70, "param_env_release": 50.0
+                "param_pressure": 0.85, "param_tension": 0.92, "param_aperture": 0.08, "param_flutter": 0.18,
+                "param_viscosity": 0.12, "param_moisture": 0.15, "param_droplet_rate": 0.10, "param_cleft_damping": 0.35,
+                "param_porcelain_mix": 0.18, "param_porcelain_size": 0.75, "param_porcelain_model": 0, "param_voice_mode": 0,
+                "param_glide_time": 25.0, "param_sub_level": -20.0, "param_drive": 0.28, "param_master_gain": -1.0,
+                "macro_squeeze": 0.85, "macro_moisture": 0.15,
+                "param_env_attack": 2.0, "param_env_decay": 220.0, "param_env_sustain": 0.65, "param_env_release": 55.0
             }
         },
         {
             "index": 2,
             "name": "03 - Viscous Multiphase Splatter",
             "params": {
-                "param_pressure": 0.78, "param_tension": 0.40, "param_aperture": 0.45, "param_flutter": 0.35,
-                "param_viscosity": 0.85, "param_moisture": 0.80, "param_droplet_rate": 0.75, "param_cleft_damping": 0.45,
-                "param_porcelain_mix": 0.40, "param_porcelain_size": 1.10, "param_porcelain_model": 2, "param_voice_mode": 0,
-                "param_glide_time": 60.0, "param_sub_level": -6.0, "param_drive": 0.25, "param_master_gain": 0.0,
+                "param_pressure": 0.78, "param_tension": 0.40, "param_aperture": 0.45, "param_flutter": 0.40,
+                "param_viscosity": 0.85, "param_moisture": 0.80, "param_droplet_rate": 0.82, "param_cleft_damping": 0.42,
+                "param_porcelain_mix": 0.42, "param_porcelain_size": 1.15, "param_porcelain_model": 2, "param_voice_mode": 0,
+                "param_glide_time": 50.0, "param_sub_level": -4.0, "param_drive": 0.28, "param_master_gain": 0.0,
                 "macro_squeeze": 0.60, "macro_moisture": 0.85,
-                "param_env_attack": 5.0, "param_env_decay": 500.0, "param_env_sustain": 0.40, "param_env_release": 150.0
+                "param_env_attack": 5.0, "param_env_decay": 550.0, "param_env_sustain": 0.42, "param_env_release": 160.0
             }
         },
         {
             "index": 3,
             "name": "04 - Visceral Sub-Rumble (18 Hz)",
             "params": {
-                "param_pressure": 0.90, "param_tension": 0.12, "param_aperture": 0.60, "param_flutter": 0.25,
-                "param_viscosity": 0.30, "param_moisture": 0.20, "param_droplet_rate": 0.15, "param_cleft_damping": 0.80,
-                "param_porcelain_mix": 0.50, "param_porcelain_size": 1.60, "param_porcelain_model": 1, "param_voice_mode": 0,
-                "param_glide_time": 80.0, "param_sub_level": 3.0, "param_drive": 0.45, "param_master_gain": 1.0,
-                "macro_squeeze": 0.70, "macro_moisture": 0.30,
-                "param_env_attack": 20.0, "param_env_decay": 800.0, "param_env_sustain": 0.80, "param_env_release": 300.0
+                "param_pressure": 0.90, "param_tension": 0.12, "param_aperture": 0.58, "param_flutter": 0.30,
+                "param_viscosity": 0.35, "param_moisture": 0.28, "param_droplet_rate": 0.22, "param_cleft_damping": 0.75,
+                "param_porcelain_mix": 0.48, "param_porcelain_size": 1.55, "param_porcelain_model": 1, "param_voice_mode": 0,
+                "param_glide_time": 75.0, "param_sub_level": 3.0, "param_drive": 0.42, "param_master_gain": 0.5,
+                "macro_squeeze": 0.70, "macro_moisture": 0.35,
+                "param_env_attack": 18.0, "param_env_decay": 850.0, "param_env_sustain": 0.75, "param_env_release": 280.0
             }
         },
         {
             "index": 4,
             "name": "05 - Flutter-Tongue Stutter",
             "params": {
-                "param_pressure": 0.75, "param_tension": 0.50, "param_aperture": 0.30, "param_flutter": 0.95,
-                "param_viscosity": 0.20, "param_moisture": 0.15, "param_droplet_rate": 0.20, "param_cleft_damping": 0.40,
-                "param_porcelain_mix": 0.25, "param_porcelain_size": 1.00, "param_porcelain_model": 0, "param_voice_mode": 0,
-                "param_glide_time": 30.0, "param_sub_level": -12.0, "param_drive": 0.20, "param_master_gain": 0.0,
-                "macro_squeeze": 0.80, "macro_moisture": 0.20,
-                "param_env_attack": 5.0, "param_env_decay": 450.0, "param_env_sustain": 0.60, "param_env_release": 80.0
+                "param_pressure": 0.75, "param_tension": 0.48, "param_aperture": 0.32, "param_flutter": 0.95,
+                "param_viscosity": 0.28, "param_moisture": 0.32, "param_droplet_rate": 0.28, "param_cleft_damping": 0.42,
+                "param_porcelain_mix": 0.28, "param_porcelain_size": 1.05, "param_porcelain_model": 0, "param_voice_mode": 0,
+                "param_glide_time": 30.0, "param_sub_level": -9.0, "param_drive": 0.24, "param_master_gain": 0.0,
+                "macro_squeeze": 0.80, "macro_moisture": 0.35,
+                "param_env_attack": 5.0, "param_env_decay": 480.0, "param_env_sustain": 0.55, "param_env_release": 90.0
             }
         },
         {
             "index": 5,
             "name": "06 - Wet Porcelain Slam",
             "params": {
-                "param_pressure": 0.82, "param_tension": 0.38, "param_aperture": 0.40, "param_flutter": 0.30,
-                "param_viscosity": 0.70, "param_moisture": 0.75, "param_droplet_rate": 0.60, "param_cleft_damping": 0.30,
-                "param_porcelain_mix": 0.75, "param_porcelain_size": 1.30, "param_porcelain_model": 1, "param_voice_mode": 0,
-                "param_glide_time": 45.0, "param_sub_level": -3.0, "param_drive": 0.35, "param_master_gain": 0.0,
-                "macro_squeeze": 0.65, "macro_moisture": 0.75,
-                "param_env_attack": 8.0, "param_env_decay": 600.0, "param_env_sustain": 0.50, "param_env_release": 200.0
+                "param_pressure": 0.82, "param_tension": 0.36, "param_aperture": 0.42, "param_flutter": 0.35,
+                "param_viscosity": 0.72, "param_moisture": 0.78, "param_droplet_rate": 0.65, "param_cleft_damping": 0.32,
+                "param_porcelain_mix": 0.72, "param_porcelain_size": 1.35, "param_porcelain_model": 1, "param_voice_mode": 0,
+                "param_glide_time": 45.0, "param_sub_level": -2.0, "param_drive": 0.32, "param_master_gain": 0.0,
+                "macro_squeeze": 0.65, "macro_moisture": 0.80,
+                "param_env_attack": 8.0, "param_env_decay": 620.0, "param_env_sustain": 0.48, "param_env_release": 210.0
             }
         },
         {
             "index": 6,
             "name": "07 - Micro-Puff Staccato",
             "params": {
-                "param_pressure": 0.60, "param_tension": 0.65, "param_aperture": 0.20, "param_flutter": 0.05,
-                "param_viscosity": 0.10, "param_moisture": 0.05, "param_droplet_rate": 0.10, "param_cleft_damping": 0.70,
-                "param_porcelain_mix": 0.10, "param_porcelain_size": 0.80, "param_porcelain_model": 0, "param_voice_mode": 0,
-                "param_glide_time": 0.0, "param_sub_level": -18.0, "param_drive": 0.05, "param_master_gain": 2.0,
-                "macro_squeeze": 0.30, "macro_moisture": 0.10,
-                "param_env_attack": 0.5, "param_env_decay": 60.0, "param_env_sustain": 0.00, "param_env_release": 15.0
+                "param_pressure": 0.62, "param_tension": 0.62, "param_aperture": 0.22, "param_flutter": 0.12,
+                "param_viscosity": 0.18, "param_moisture": 0.15, "param_droplet_rate": 0.18, "param_cleft_damping": 0.65,
+                "param_porcelain_mix": 0.12, "param_porcelain_size": 0.85, "param_porcelain_model": 0, "param_voice_mode": 0,
+                "param_glide_time": 0.0, "param_sub_level": -15.0, "param_drive": 0.10, "param_master_gain": 1.5,
+                "macro_squeeze": 0.35, "macro_moisture": 0.18,
+                "param_env_attack": 0.5, "param_env_decay": 70.0, "param_env_sustain": 0.00, "param_env_release": 20.0
             }
         },
         {
             "index": 7,
             "name": "08 - Extended Gaseous Drift",
             "params": {
-                "param_pressure": 0.55, "param_tension": 0.35, "param_aperture": 0.50, "param_flutter": 0.40,
-                "param_viscosity": 0.15, "param_moisture": 0.10, "param_droplet_rate": 0.05, "param_cleft_damping": 0.50,
-                "param_porcelain_mix": 0.30, "param_porcelain_size": 1.00, "param_porcelain_model": 3, "param_voice_mode": 0,
-                "param_glide_time": 120.0, "param_sub_level": -8.0, "param_drive": 0.15, "param_master_gain": 0.0,
-                "macro_squeeze": 0.35, "macro_moisture": 0.15,
-                "param_env_attack": 40.0, "param_env_decay": 1800.0, "param_env_sustain": 0.75, "param_env_release": 400.0
+                "param_pressure": 0.58, "param_tension": 0.32, "param_aperture": 0.52, "param_flutter": 0.42,
+                "param_viscosity": 0.22, "param_moisture": 0.18, "param_droplet_rate": 0.12, "param_cleft_damping": 0.48,
+                "param_porcelain_mix": 0.32, "param_porcelain_size": 1.05, "param_porcelain_model": 3, "param_voice_mode": 0,
+                "param_glide_time": 110.0, "param_sub_level": -6.0, "param_drive": 0.18, "param_master_gain": 0.0,
+                "macro_squeeze": 0.40, "macro_moisture": 0.22,
+                "param_env_attack": 35.0, "param_env_decay": 1750.0, "param_env_sustain": 0.70, "param_env_release": 380.0
             }
         },
         {
             "index": 8,
             "name": "09 - Unison Twin Cannons",
             "params": {
-                "param_pressure": 0.85, "param_tension": 0.42, "param_aperture": 0.35, "param_flutter": 0.50,
-                "param_viscosity": 0.30, "param_moisture": 0.25, "param_droplet_rate": 0.30, "param_cleft_damping": 0.40,
-                "param_porcelain_mix": 0.45, "param_porcelain_size": 1.15, "param_porcelain_model": 1, "param_voice_mode": 2,
-                "param_glide_time": 50.0, "param_sub_level": 0.0, "param_drive": 0.40, "param_master_gain": -2.0,
-                "macro_squeeze": 0.75, "macro_moisture": 0.30,
-                "param_env_attack": 10.0, "param_env_decay": 500.0, "param_env_sustain": 0.70, "param_env_release": 150.0
+                "param_pressure": 0.85, "param_tension": 0.40, "param_aperture": 0.38, "param_flutter": 0.52,
+                "param_viscosity": 0.35, "param_moisture": 0.32, "param_droplet_rate": 0.35, "param_cleft_damping": 0.38,
+                "param_porcelain_mix": 0.48, "param_porcelain_size": 1.20, "param_porcelain_model": 1, "param_voice_mode": 2,
+                "param_glide_time": 45.0, "param_sub_level": 0.0, "param_drive": 0.38, "param_master_gain": -2.0,
+                "macro_squeeze": 0.75, "macro_moisture": 0.35,
+                "param_env_attack": 10.0, "param_env_decay": 520.0, "param_env_sustain": 0.68, "param_env_release": 160.0
             }
         },
         {
             "index": 9,
             "name": "10 - The Brown Note 808",
             "params": {
-                "param_pressure": 0.95, "param_tension": 0.10, "param_aperture": 0.25, "param_flutter": 0.15,
-                "param_viscosity": 0.20, "param_moisture": 0.10, "param_droplet_rate": 0.10, "param_cleft_damping": 0.90,
-                "param_porcelain_mix": 0.20, "param_porcelain_size": 1.50, "param_porcelain_model": 1, "param_voice_mode": 0,
-                "param_glide_time": 15.0, "param_sub_level": 6.0, "param_drive": 0.55, "param_master_gain": 1.0,
-                "macro_squeeze": 0.90, "macro_moisture": 0.15,
-                "param_env_attack": 1.0, "param_env_decay": 1200.0, "param_env_sustain": 0.30, "param_env_release": 250.0
+                "param_pressure": 0.95, "param_tension": 0.10, "param_aperture": 0.28, "param_flutter": 0.18,
+                "param_viscosity": 0.25, "param_moisture": 0.18, "param_droplet_rate": 0.15, "param_cleft_damping": 0.88,
+                "param_porcelain_mix": 0.25, "param_porcelain_size": 1.55, "param_porcelain_model": 1, "param_voice_mode": 0,
+                "param_glide_time": 15.0, "param_sub_level": 6.0, "param_drive": 0.52, "param_master_gain": 1.0,
+                "macro_squeeze": 0.90, "macro_moisture": 0.20,
+                "param_env_attack": 1.0, "param_env_decay": 1150.0, "param_env_sustain": 0.35, "param_env_release": 260.0
             }
         }
     ]
